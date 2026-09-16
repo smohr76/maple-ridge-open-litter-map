@@ -2,62 +2,56 @@ import os
 import json
 import requests
 
-# Retrieve the API token securely from environment variables
-OLM_TOKEN = os.getenv("OLM_API_TOKEN")
-OUTPUT_PATH = "public/data/litter.geojson"
-
-headers = {
-    "Accept": "application/json"
-}
-
-# Add Bearer Token if configured in secrets
-if OLM_TOKEN:
-    headers["Authorization"] = f"Bearer {OLM_TOKEN}"
-
-# Endpoint: GET /api/v3/user/photos
-url = "https://openlittermap.com/api/v3/user/photos?per_page=100"
-
-try:
-    response = requests.get(url, headers=headers, timeout=15)
-    response.raise_for_status()
-    data = response.json()
-except Exception as e:
-    print(f"Error fetching data from OpenLitterMap API: {e}")
-    data = {}
-
-features = []
-
-# Parse API response array into a standard GeoJSON FeatureCollection
-items = data.get("data", []) if isinstance(data, dict) else []
-
-for item in items:
-    lat = item.get("lat")
-    lon = item.get("lon")
+def fetch_litter_data():
+    # Public OpenLitterMap endpoint (No token required)
+    url = "https://openlittermap.com/api/v1/photos"
     
-    if lat is not None and lon is not None:
-        features.append({
-            "type": "Feature",
-            "geometry": {
-                "type": "Point",
-                "coordinates": [float(lon), float(lat)]
-            },
-            "properties": {
-                "id": item.get("id"),
-                "datetime": item.get("created_at"),
-                "picked_up": item.get("picked_up", True),
-                "photo_url": item.get("filename"),  # Direct CDN image URL
-                "tags": item.get("new_tags", [])
-            }
-        })
+    # Maple Ridge, BC bounding box constraints
+    params = {
+        "min_lat": 49.1200,
+        "max_lat": 49.2800,
+        "min_lon": -122.7200,
+        "max_lon": -122.4500
+    }
 
-geojson_payload = {
-    "type": "FeatureCollection",
-    "features": features
-}
+    headers = {"User-Agent": "MapleRidgeLitterMap/1.0"}
 
-# Ensure destination directory exists and write output payload
-os.makedirs(os.path.dirname(OUTPUT_PATH), exist_ok=True)
-with open(OUTPUT_PATH, "w", encoding="utf-8") as f:
-    json.dump(geojson_payload, f, indent=2)
+    try:
+        res = requests.get(url, params=params, headers=headers, timeout=15)
+        res.raise_for_status()
+        raw_data = res.json()
+    except Exception as e:
+        print(f"API Request Error: {e}")
+        raw_data = []
 
-print(f"Successfully serialized {len(features)} spatial features to {OUTPUT_PATH}")
+    items = raw_data if isinstance(raw_data, list) else raw_data.get("data", [])
+    features = []
+
+    for item in items:
+        lat = item.get("lat") or item.get("latitude")
+        lon = item.get("lon") or item.get("longitude")
+        if lat and lon:
+            features.append({
+                "type": "Feature",
+                "geometry": {
+                    "type": "Point",
+                    "coordinates": [float(lon), float(lat)]
+                },
+                "properties": {
+                    "id": item.get("id", "N/A"),
+                    "datetime": item.get("created_at", ""),
+                    "photo_url": item.get("url") or item.get("filename", "")
+                }
+            })
+
+    geojson = {"type": "FeatureCollection", "features": features}
+
+    out_path = os.path.join("public", "data", "litter.geojson")
+    os.makedirs(os.path.dirname(out_path), exist_ok=True)
+    with open(out_path, "w") as f:
+        json.dump(geojson, f, indent=2)
+
+    print(f"Fetched {len(features)} points without authentication.")
+
+if __name__ == "__main__":
+    fetch_litter_data()
