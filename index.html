@@ -1,1 +1,82 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Maple Ridge Litter Map</title>
+  <link href="https://unpkg.com/maplibre-gl@3.6.2/dist/maplibre-gl.css" rel="stylesheet" />
+  <script src="https://unpkg.com/maplibre-gl@3.6.2/dist/maplibre-gl.js"></script>
+  <style>
+    body { margin: 0; padding: 0; font-family: sans-serif; }
+    #map { position: absolute; top: 0; bottom: 0; width: 100%; }
+    #legend {
+      position: absolute; top: 10px; left: 10px; z-index: 1;
+      background: rgba(255, 255, 255, 0.9); padding: 10px 15px;
+      border-radius: 4px; box-shadow: 0 2px 4px rgba(0,0,0,0.2);
+    }
+    h3 { margin: 0 0 5px 0; font-size: 14px; }
+  </style>
+</head>
+<body>
 
+<div id="legend">
+  <h3>Maple Ridge Litter Map</h3>
+  <p style="margin:0; font-size: 12px; color: #555;">Live OpenLitterMap Sync</p>
+</div>
+<div id="map"></div>
+
+<script>
+  const map = new maplibregl.Map({
+    container: 'map',
+    style: 'https://basemaps.cartocdn.com/gl/positron-gl-style/style.json',
+    center: [-122.601, 49.2193], // Default centered on Maple Ridge, BC
+    zoom: 12
+  });
+
+  map.addControl(new maplibregl.NavigationControl());
+
+  map.on('load', () => {
+    // Fetch generated GeoJSON from the static directory
+    map.addSource('litter-data', {
+      type: 'geojson',
+      data: './public/data/litter.geojson'
+    });
+
+    // Render spatial points
+    map.addLayer({
+      id: 'litter-points',
+      type: 'circle',
+      source: 'litter-data',
+      paint: {
+        'circle-radius': 7,
+        'circle-color': '#e63946',
+        'circle-stroke-width': 1.5,
+        'circle-stroke-color': '#ffffff'
+      }
+    });
+
+    // Add click popup for individual points
+    map.on('click', 'litter-points', (e) => {
+      const coordinates = e.features[0].geometry.coordinates.slice();
+      const props = e.features[0].properties;
+
+      let content = `<strong>ID:</strong> ${props.id}<br>
+                     <strong>Date:</strong> ${new Date(props.datetime).toLocaleDateString()}<br>`;
+      
+      if (props.photo_url) {
+        content += `<br><img src="${props.photo_url}" width="180" style="border-radius:4px;" />`;
+      }
+
+      new maplibregl.Popup()
+        .setLngLat(coordinates)
+        .setHTML(content)
+        .addTo(map);
+    });
+
+    map.on('mouseenter', 'litter-points', () => map.getCanvas().style.cursor = 'pointer');
+    map.on('mouseleave', 'litter-points', () => map.getCanvas().style.cursor = '');
+  });
+</script>
+
+</body>
+</html>
