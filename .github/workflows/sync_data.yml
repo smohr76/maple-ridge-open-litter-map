@@ -1,0 +1,35 @@
+name: Sync OpenLitterMap Data
+
+on:
+  schedule:
+    - cron: '0 0 * * *'  # Runs daily at midnight UTC
+  workflow_dispatch:      # Allows manual triggers from the Actions tab
+
+jobs:
+  build-and-sync:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout Source Code
+        uses: actions/checkout@v4
+
+      - name: Set up Python Environment
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+
+      - name: Install Dependencies
+        run: pip install requests
+
+      - name: Execute ETL Extraction Script
+        env:
+          OLM_API_TOKEN: ${{ secrets.OLM_API_TOKEN }}
+        run: python scripts/fetch_olm.py
+
+      - name: Commit Updated GeoJSON Payload
+        run: |
+          git config --global user.name "github-actions[bot]"
+          git config --global user.email "github-actions[bot]@users.noreply.github.com"
+          git add public/data/litter.geojson
+          git commit -m "Automated GeoJSON dataset refresh" || exit 0
+          git push
