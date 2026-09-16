@@ -29,20 +29,32 @@
   const map = new maplibregl.Map({
     container: 'map',
     style: 'https://basemaps.cartocdn.com/gl/positron-gl-style/style.json',
-    center: [-122.601, 49.2193], // Default centered on Maple Ridge, BC
+    center: [-122.601, 49.2193], // Centered on Maple Ridge, BC
     zoom: 12
   });
 
   map.addControl(new maplibregl.NavigationControl());
 
-  map.on('load', () => {
-    // Fetch generated GeoJSON from the static directory
+  map.on('load', async () => {
+    const dataUrl = './data/litter.geojson';
+
+    // Verify network fetch response directly in client console
+    try {
+      const res = await fetch(dataUrl);
+      if (!res.ok) throw new Error(`HTTP Error Status: ${res.status}`);
+      const data = await res.json();
+      console.log('GeoJSON Payload Successfully Loaded:', data);
+    } catch (err) {
+      console.error('Failed to load GeoJSON payload from target path:', dataUrl, err);
+    }
+
+    // Add source instance
     map.addSource('litter-data', {
       type: 'geojson',
-      data: './public/data/litter.geojson'
+      data: dataUrl
     });
 
-    // Render spatial points
+    // Render point layer
     map.addLayer({
       id: 'litter-points',
       type: 'circle',
@@ -55,7 +67,7 @@
       }
     });
 
-    // Add click popup for individual points
+    // Configure interactive popups
     map.on('click', 'litter-points', (e) => {
       const coordinates = e.features[0].geometry.coordinates.slice();
       const props = e.features[0].properties;
