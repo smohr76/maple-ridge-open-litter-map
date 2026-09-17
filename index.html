@@ -3,25 +3,26 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Maple Ridge Litter Map</title>
+  <title>Maple Ridge OpenLitterMap Dashboard</title>
   <link href="https://unpkg.com/maplibre-gl@3.6.2/dist/maplibre-gl.css" rel="stylesheet" />
   <script src="https://unpkg.com/maplibre-gl@3.6.2/dist/maplibre-gl.js"></script>
   <style>
-    body { margin: 0; padding: 0; font-family: sans-serif; }
+    body { margin: 0; padding: 0; font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; }
     #map { position: absolute; top: 0; bottom: 0; width: 100%; }
-    #legend {
+    .map-overlay {
       position: absolute; top: 10px; left: 10px; z-index: 1;
-      background: rgba(255, 255, 255, 0.9); padding: 10px 15px;
-      border-radius: 4px; box-shadow: 0 2px 4px rgba(0,0,0,0.2);
+      background: rgba(255, 255, 255, 0.95); padding: 12px 16px;
+      border-radius: 6px; box-shadow: 0 2px 6px rgba(0,0,0,0.15);
     }
-    h3 { margin: 0 0 5px 0; font-size: 14px; }
+    .map-overlay h2 { margin: 0 0 4px 0; font-size: 16px; color: #111827; }
+    .map-overlay p { margin: 0; font-size: 12px; color: #6B7280; }
   </style>
 </head>
 <body>
 
-<div id="legend">
-  <h3>Maple Ridge Litter Map</h3>
-  <p style="margin:0; font-size: 12px; color: #555;">Live OpenLitterMap Sync</p>
+<div class="map-overlay">
+  <h2>Maple Ridge Litter Tracker</h2>
+  <p>Live Sync: OpenLitterMap API</p>
 </div>
 <div id="map"></div>
 
@@ -29,59 +30,46 @@
   const map = new maplibregl.Map({
     container: 'map',
     style: 'https://basemaps.cartocdn.com/gl/positron-gl-style/style.json',
-    center: [-122.601, 49.2193], // Centered on Maple Ridge, BC
+    center: [-122.6010, 49.2193], // Maple Ridge, BC
     zoom: 12
   });
 
   map.addControl(new maplibregl.NavigationControl());
 
-  map.on('load', async () => {
-    const dataUrl = './public/data/litter.geojson';
-
-    // Verify network fetch response directly in client console
-    try {
-      const res = await fetch(dataUrl);
-      if (!res.ok) throw new Error(`HTTP Error Status: ${res.status}`);
-      const data = await res.json();
-      console.log('GeoJSON Payload Successfully Loaded:', data);
-    } catch (err) {
-      console.error('Failed to load GeoJSON payload from target path:', dataUrl, err);
-    }
-
-    // Add source instance
+  map.on('load', () => {
+    // Fetch the generated GeoJSON payload committed by the GitHub Action
     map.addSource('litter-data', {
       type: 'geojson',
-      data: dataUrl
+      data: './public/data/litter.geojson'
     });
 
-    // Render point layer
     map.addLayer({
       id: 'litter-points',
       type: 'circle',
       source: 'litter-data',
       paint: {
-        'circle-radius': 7,
-        'circle-color': '#e63946',
-        'circle-stroke-width': 1.5,
-        'circle-stroke-color': '#ffffff'
+        'circle-radius': 8,
+        'circle-color': '#EF4444',
+        'circle-stroke-width': 2,
+        'circle-stroke-color': '#FFFFFF'
       }
     });
 
-    // Configure interactive popups
+    // Interactive Popup on Click
     map.on('click', 'litter-points', (e) => {
-      const coordinates = e.features[0].geometry.coordinates.slice();
+      const coords = e.features[0].geometry.coordinates.slice();
       const props = e.features[0].properties;
 
-      let content = `<strong>ID:</strong> ${props.id}<br>
-                     <strong>Date:</strong> ${new Date(props.datetime).toLocaleDateString()}<br>`;
-      
+      let popupHtml = `<strong>ID:</strong> ${props.id}<br>
+                       <strong>Timestamp:</strong> ${props.created_at || 'N/A'}`;
+
       if (props.photo_url) {
-        content += `<br><img src="${props.photo_url}" width="180" style="border-radius:4px;" />`;
+        popupHtml += `<br><img src="${props.photo_url}" width="160" style="margin-top:6px; border-radius:4px;" />`;
       }
 
       new maplibregl.Popup()
-        .setLngLat(coordinates)
-        .setHTML(content)
+        .setLngLat(coords)
+        .setHTML(popupHtml)
         .addTo(map);
     });
 
