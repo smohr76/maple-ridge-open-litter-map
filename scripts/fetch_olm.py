@@ -3,7 +3,6 @@ import json
 import sys
 import requests
 
-# Geographic Bounding Box for City of Maple Ridge, BC
 MAPLE_RIDGE_BOUNDS = {
     "min_lat": "49.1800",
     "max_lat": "49.2800",
@@ -16,39 +15,41 @@ OLM_EMAIL = os.getenv("OLM_EMAIL")
 OLM_PASSWORD = os.getenv("OLM_PASSWORD")
 
 def fetch_litter_data():
-    headers = {"Accept": "application/json"}
+    headers = {"Accept": "application/json", "User-Agent": "MapleRidgeETL/1.0"}
     
-    # Strategy 1: Private Ingestion using Sanctum Bearer Token
+    # 1. Attempt Private Authentication (Sanctum)
     if OLM_EMAIL and OLM_PASSWORD:
         print("Attempting Sanctum authentication for private user dataset...")
-        auth_url = "https://openlittermap.com/api/auth/token"
-        payload = {
-            "email": OLM_EMAIL,
-            "password": OLM_PASSWORD,
-            "device_name": "GitHub_Actions_ETL"
-        }
-        
         try:
+            auth_url = "https://openlittermap.com/api/auth/token"
+            payload = {
+                "email": OLM_EMAIL,
+                "password": OLM_PASSWORD,
+                "device_name": "GitHub_Actions_ETL"
+            }
             auth_res = requests.post(auth_url, json=payload, headers=headers, timeout=15)
-            if auth_res.status_code == 200:
+            
+            # Ensure body is non-empty JSON before decoding
+            if auth_res.status_code == 200 and "application/json" in auth_res.headers.get("Content-Type", ""):
                 token = auth_res.json().get("token")
-                user_headers = {**headers, "Authorization": f"Bearer {token}"}
-                user_res = requests.get("https://openlittermap.com/api/v1/user/photos", headers=user_headers, timeout=15)
-                if user_res.status_code == 200:
-                    print("Successfully retrieved authenticated user data.")
-                    return user_res.json()
-                print(f"User endpoint returned HTTP {user_res.status_code}. Falling back to public bounds query...")
+                if token:
+                    user_headers = {**headers, "Authorization": f"Bearer {token}"}
+                    user_res = requests.get("https://openlittermap.com/api/v1/user/photos", headers=user_headers, timeout=15)
+                    if user_res.status_code == 200 and "application/json" in user_res.headers.get("Content-Type", ""):
+                        print("Successfully retrieved authenticated user data.")
+                        return user_res.json()
+            print(f"Auth token generation failed (Status: {auth_res.status_code}). Bypassing auth...")
         except Exception as err:
-            print(f"Authentication error: {err}. Falling back to public bounds query...")
+            print(f"Authentication handling error: {err}. Bypassing auth...")
 
-    # Strategy 2: Public Spatial Bounding Box Query
+    # 2. Public Spatial Bounding Box Ingestion
     print("Executing public spatial query with Maple Ridge bounding box...")
     public_url = "https://openlittermap.com/api/v1/photos"
     res = requests.get(public_url, params=MAPLE_RIDGE_BOUNDS, headers=headers, timeout=15)
     
     print(f"HTTP Status Code: {res.status_code}")
     if res.status_code != 200:
-        raise RuntimeError(f"OpenLitterMap API rejected request with HTTP {res.status_code}: {res.text}")
+        raise RuntimeError(f"OpenLitterMap API returned HTTP {res.status_code}: {res.text[:200]}")
         
     return res.json()
 
@@ -68,11 +69,10 @@ def transform_to_geojson(raw_data):
                     "coordinates": [float(lon), float(lat)]
                 },
                 "properties": {
-                    "id": item.get("id"),
-                    "created_at": item.get("created_at"),
-                    "photo_url": item.get("url") or item.get("filename"),
-                    "tags": item.get("tags", []),
-                    "jurisdiction": "City of Maple Ridge"
+                    "id": item.get("id", "N/A"),
+                    "created_at": item.get("created_at", ""),
+                    "photo_url": item.get("url") or item.get("filename", ""),
+                    "tags": item.get("tags", [])
                 }
             })
             
@@ -87,8 +87,7 @@ if __name__ == "__main__":
         with open(OUTPUT_PATH, "w") as f:
             json.dump(geojson_payload, f, indent=2)
             
-        feature_count = len(geojson_payload["features"])
-        print(f"ETL Pipeline Succeeded: Written {feature_count} spatial features to {OUTPUT_PATH}")
-    except Exception as e:
-        print(f"Pipeline Execution Error: {e}", file=sys.stderr)
+        print(f"Pipeline Completed: Written {len(geojson_payload['features'])} features to {OUTPUT_PATH}")
+    except Exception as fatal_err:
+        print(f"Fatal Extraction Pipeline Error: {fatal_err}", file=sys.stderr)
         sys.exit(1)
