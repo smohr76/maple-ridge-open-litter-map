@@ -3,12 +3,12 @@ import json
 import sys
 import requests
 
-# Bounding Box Coordinates for City of Maple Ridge / Adopt-a-Block Zones
+# Geographic Bounding Box for City of Maple Ridge, BC
 MAPLE_RIDGE_BOUNDS = {
-    "min_lat": 49.1800,
-    "max_lat": 49.2800,
-    "min_lon": -122.6800,
-    "max_lon": -122.4500
+    "min_lat": "49.1800",
+    "max_lat": "49.2800",
+    "min_lon": "-122.6800",
+    "max_lon": "-122.4500"
 }
 
 OUTPUT_PATH = "public/data/litter.geojson"
@@ -18,9 +18,9 @@ OLM_PASSWORD = os.getenv("OLM_PASSWORD")
 def fetch_litter_data():
     headers = {"Accept": "application/json"}
     
-    # Mode 1: Private Authenticated Ingestion (Sanctum Bearer Token)
+    # Strategy 1: Private Ingestion using Sanctum Bearer Token
     if OLM_EMAIL and OLM_PASSWORD:
-        print("Attempting Sanctum authentication for private user data...")
+        print("Attempting Sanctum authentication for private user dataset...")
         auth_url = "https://openlittermap.com/api/auth/token"
         payload = {
             "email": OLM_EMAIL,
@@ -35,20 +35,20 @@ def fetch_litter_data():
                 user_headers = {**headers, "Authorization": f"Bearer {token}"}
                 user_res = requests.get("https://openlittermap.com/api/v1/user/photos", headers=user_headers, timeout=15)
                 if user_res.status_code == 200:
-                    print("Successfully retrieved user-specific photo records.")
+                    print("Successfully retrieved authenticated user data.")
                     return user_res.json()
-                print(f"User data fetch failed with status {user_res.status_code}. Falling back to spatial query.")
+                print(f"User endpoint returned HTTP {user_res.status_code}. Falling back to public bounds query...")
         except Exception as err:
-            print(f"Authentication failure: {err}. Falling back to spatial query.")
+            print(f"Authentication error: {err}. Falling back to public bounds query...")
 
-    # Mode 2: Public Spatial Geobounds Query (Maple Ridge Bounding Box)
-    print("Executing public geobounds query for Maple Ridge coordinates...")
+    # Strategy 2: Public Spatial Bounding Box Query
+    print("Executing public spatial query with Maple Ridge bounding box...")
     public_url = "https://openlittermap.com/api/v1/photos"
     res = requests.get(public_url, params=MAPLE_RIDGE_BOUNDS, headers=headers, timeout=15)
     
     print(f"HTTP Status Code: {res.status_code}")
     if res.status_code != 200:
-        raise RuntimeError(f"OpenLitterMap API returned HTTP {res.status_code}: {res.text}")
+        raise RuntimeError(f"OpenLitterMap API rejected request with HTTP {res.status_code}: {res.text}")
         
     return res.json()
 
@@ -57,7 +57,6 @@ def transform_to_geojson(raw_data):
     items = raw_data if isinstance(raw_data, list) else raw_data.get("data", [])
     
     for item in items:
-        # Resolve coordinate key variations from OLM API payloads
         lat = item.get("lat") or item.get("latitude")
         lon = item.get("lon") or item.get("longitude")
         
@@ -89,7 +88,7 @@ if __name__ == "__main__":
             json.dump(geojson_payload, f, indent=2)
             
         feature_count = len(geojson_payload["features"])
-        print(f"ETL Pipeline Complete: Processed and serialized {feature_count} GeoJSON features.")
+        print(f"ETL Pipeline Succeeded: Written {feature_count} spatial features to {OUTPUT_PATH}")
     except Exception as e:
-        print(f"Pipeline Critical Failure: {e}", file=sys.stderr)
+        print(f"Pipeline Execution Error: {e}", file=sys.stderr)
         sys.exit(1)
