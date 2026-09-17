@@ -1,4 +1,35 @@
 {
   "type": "FeatureCollection",
-  "features": []
+  "features": [
+    {
+      "type": "Feature",
+      "geometry": {
+        "type": "Point",
+        "coordinates": [
+          -122.601,
+          49.2193
+        ]
+      },
+      "properties": {
+        "id": "SEED-001",
+        "datetime": "2026-09-16",
+        "photo_url": ""
+      }
+    },
+    {
+      "type": "Feature",
+      "geometry": {
+        "type": "Point",
+        "coordinates": [
+          -122.585,
+          49.225
+        ]
+      },
+      "properties": {
+        "id": "SEED-002",
+        "datetime": "2026-09-16",
+        "photo_url": ""
+      }
+    }
+  ]
 }
