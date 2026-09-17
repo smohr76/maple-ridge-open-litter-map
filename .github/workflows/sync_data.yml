@@ -2,36 +2,39 @@ name: Sync OpenLitterMap Data
 
 on:
   schedule:
-    - cron: '0 0 * * *'  # Runs automatically every day at midnight UTC[cite: 1]
-  workflow_dispatch:      # Enables the "Run workflow" button in the Actions tab[cite: 1]
+    - cron: '0 0 * * *'  # Runs daily at 00:00 UTC
+  workflow_dispatch:      # Enables manual trigger in Actions tab
 
 jobs:
   build-and-sync:
     runs-on: ubuntu-latest
     permissions:
-      contents: write     # Required for the workflow to commit and push changes back to main
+      contents: write     # Permits automated commits back to main branch
 
     steps:
       - name: Checkout Source Code
-        uses: actions/checkout@v4[cite: 1]
+        uses: actions/checkout@v4
 
       - name: Set up Python Environment
-        uses: actions/setup-python@v5[cite: 1]
+        uses: actions/setup-python@v5
         with:
           python-version: '3.11'
 
       - name: Install Dependencies
         run: |
           python -m pip install --upgrade pip
-          pip install requests[cite: 1]
+          pip install requests
 
       - name: Execute ETL Extraction Script
-        run: python scripts/fetch_olm.py[cite: 1]
+        env:
+          OLM_EMAIL: ${{ secrets.OLM_EMAIL }}
+          OLM_PASSWORD: ${{ secrets.OLM_PASSWORD }}
+        run: python scripts/fetch_olm.py
 
-      - name: Commit and Push Updated GeoJSON
+      - name: Commit Updated GeoJSON Payload
         run: |
-          git config --global user.name "github-actions[bot]"[cite: 1]
-          git config --global user.email "github-actions[bot]@users.noreply.github.com"[cite: 1]
-          git add public/data/litter.geojson[cite: 1]
-          git diff-index --quiet HEAD || git commit -m "chore: automated OpenLitterMap dataset refresh"
-          git push[cite: 1]
+          git config --global user.name "github-actions[bot]"
+          git config --global user.email "github-actions[bot]@users.noreply.github.com"
+          git add public/data/litter.geojson
+          git diff-index --quiet HEAD || git commit -m "chore: automated OpenLitterMap data sync"
+          git push
