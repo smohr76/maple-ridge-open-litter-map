@@ -32,7 +32,10 @@
         ],
         "groups": [
           "litter"
-        ]
+        ],
+        "has_litter": true,
+        "has_pet_waste": false,
+        "has_substances": false
       }
     },
     {
@@ -96,7 +99,10 @@
         ],
         "groups": [
           "litter"
-        ]
+        ],
+        "has_litter": true,
+        "has_pet_waste": false,
+        "has_substances": false
       }
     },
     {
@@ -122,7 +128,10 @@
         ],
         "groups": [
           "pet_waste"
-        ]
+        ],
+        "has_litter": false,
+        "has_pet_waste": true,
+        "has_substances": false
       }
     },
     {
@@ -148,7 +157,10 @@
         ],
         "groups": [
           "pet_waste"
-        ]
+        ],
+        "has_litter": false,
+        "has_pet_waste": true,
+        "has_substances": false
       }
     },
     {
@@ -174,7 +186,10 @@
         ],
         "groups": [
           "litter"
-        ]
+        ],
+        "has_litter": true,
+        "has_pet_waste": false,
+        "has_substances": false
       }
     },
     {
@@ -200,7 +215,10 @@
         ],
         "groups": [
           "litter"
-        ]
+        ],
+        "has_litter": true,
+        "has_pet_waste": false,
+        "has_substances": false
       }
     },
     {
@@ -234,7 +252,10 @@
         ],
         "groups": [
           "litter"
-        ]
+        ],
+        "has_litter": true,
+        "has_pet_waste": false,
+        "has_substances": false
       }
     },
     {
@@ -260,7 +281,10 @@
         ],
         "groups": [
           "litter"
-        ]
+        ],
+        "has_litter": true,
+        "has_pet_waste": false,
+        "has_substances": false
       }
     }
   ]
