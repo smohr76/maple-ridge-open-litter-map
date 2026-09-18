@@ -4,75 +4,73 @@ import sys
 import requests
 
 OUTPUT_PATH = "public/data/litter.geojson"
-OLM_TOKEN = os.getenv("OLM_TOKEN")
+OLM_EMAIL = os.getenv("OLM_EMAIL")
+OLM_PASSWORD = os.getenv("OLM_PASSWORD")
 
-def fetch_all_olm_photos():
+def obtain_sanctum_token():
+    """Exchanges credentials for a Sanctum Bearer Token using the verified endpoint."""
+    if not OLM_EMAIL or not OLM_PASSWORD:
+        print("Error: OLM_EMAIL or OLM_PASSWORD environment variables are missing.")
+        return None
+
+    auth_url = "https://openlittermap.com/api/auth/token"
+    payload = {
+        "email": OLM_EMAIL,
+        "password": OLM_PASSWORD
+    }
     headers = {
+        "Content-Type": "application/json",
         "Accept": "application/json",
         "User-Agent": "MapleRidgeETL/1.0"
     }
+
+    print(f"Authenticating against {auth_url} for user: {OLM_EMAIL[:3]}***")
+    try:
+        res = requests.post(auth_url, json=payload, headers=headers, timeout=15)
+        if res.status_code in (200, 201):
+            data = res.json()
+            token = data.get("token")
+            if token:
+                print("Sanctum Bearer Token successfully acquired.")
+                return token
+        print(f"Auth failed with status {res.status_code}: {res.text[:150]}")
+    except Exception as err:
+        print(f"Authentication exception: {err}")
     
-    # Select endpoint according to api.md specifications
-    if OLM_TOKEN:
-        headers["Authorization"] = f"Bearer {OLM_TOKEN}"
-        base_url = "https://openlittermap.com/api/v1/user/photos"
-        print("Executing authenticated query against /api/v1/user/photos...")
-    else:
-        base_url = "https://openlittermap.com/api/v1/public/photos"
-        print("OLM_TOKEN not found. Executing unauthenticated query against /api/v1/public/photos...")
+    return None
 
-    all_records = []
-    page = 1
+def fetch_user_photos(token):
+    """Fetches user photos using the acquired Bearer token."""
+    headers = {
+        "Accept": "application/json",
+        "Authorization": f"Bearer {token}",
+        "User-Agent": "MapleRidgeETL/1.0"
+    }
+    
+    # Primary authenticated endpoint
+    url = "https://openlittermap.com/api/v1/user/photos"
+    print(f"Fetching authenticated photos from {url}...")
 
-    while True:
-        url = f"{base_url}?page={page}"
-        print(f"Fetching page {page} from {url}...")
+    try:
+        res = requests.get(url, headers=headers, timeout=20)
+        print(f"HTTP Status Code: {res.status_code}")
 
-        try:
-            res = requests.get(url, headers=headers, timeout=20)
-            print(f"HTTP Status Code: {res.status_code}")
-
-            if res.status_code != 200 or not res.text.strip():
-                print(f"Non-200 response or empty body received on page {page}.")
-                break
-
+        if res.status_code == 200 and res.text.strip():
             payload = res.json()
-            
-            # Unpack Laravel LengthAwarePaginator object
-            if isinstance(payload, dict) and "data" in payload:
-                items = payload["data"]
-            elif isinstance(payload, list):
-                items = payload
-            else:
-                items = []
+            # Extract list from paginated object or root array
+            items = payload.get("data", []) if isinstance(payload, dict) else payload
+            print(f"Successfully retrieved {len(items)} raw user records.")
+            return items
+        else:
+            print(f"API request failed with status {res.status_code}. Response: {res.text[:150]}")
+    except Exception as err:
+        print(f"API fetch exception: {err}")
 
-            if not items:
-                print(f"No records returned on page {page}. Fetching completed.")
-                break
-
-            all_records.extend(items)
-            print(f"Retrieved {len(items)} items from page {page}. Total so far: {len(all_records)}")
-
-            # Check pagination boundaries
-            if isinstance(payload, dict):
-                next_page = payload.get("next_page_url")
-                if not next_page:
-                    break
-            else:
-                break
-
-            page += 1
-
-        except Exception as err:
-            print(f"Exception during API fetch on page {page}: {err}")
-            break
-
-    return all_records
+    return []
 
 def transform_to_geojson(raw_items):
     features = []
     for item in raw_items:
-        # Extract spatial coordinates per OpenLitterMap schema
         lat = item.get("lat") or item.get("latitude")
         lon = item.get("lon") or item.get("longitude")
 
@@ -93,10 +91,11 @@ def transform_to_geojson(raw_items):
     return {"type": "FeatureCollection", "features": features}
 
 if __name__ == "__main__":
-    raw_data = fetch_all_olm_photos()
+    token = obtain_sanctum_token()
+    raw_data = fetch_user_photos(token) if token else []
     
     if not raw_data:
-        print("Warning: Zero records retrieved from API. Inserting standard seed point.")
+        print("Warning: Zero records retrieved from API. Inserting standard fallback seed point.")
         raw_data = [{
             "id": "SEED-001",
             "lat": 49.2193,
