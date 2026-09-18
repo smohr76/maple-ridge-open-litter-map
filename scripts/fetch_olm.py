@@ -11,59 +11,95 @@ PHOTOS_URL = "https://openlittermap.com/api/v3/user/photos"
 assert "v3" in PHOTOS_URL, "PHOTOS_URL must use the v3 endpoint — v1 was removed by OpenLitterMap"
 
 
-def classify_tag_group(tag):  
-    category = tag.get("category")  
-    parent_category = tag.get("parent_category")  
-    item = str(tag.get("item", "")).lower()  
-    tag_type = tag.get("type")  
-  
-    if tag_type == "custom_tag" and any(kw in item for kw in ("thc", "cannabis", "weed")):  
-        return "substances"  
-    if category in ("smoking", "alcohol"):  
-        return "substances"  
-    if parent_category in ("smoking", "alcohol"):  
-        return "substances"  
-    if category == "pets" and item in ("dogshit", "dogshit_in_bag"):  
-        return "pet_waste"  
+def classify_tag_group(tag):
+    category = str(tag.get("category") or "").lower()
+    parent_category = str(tag.get("parent_category") or "").lower()
+    item = str(tag.get("item", "")).lower()
+    tag_type = tag.get("type")
+
+    if tag_type == "custom_tag" and any(kw in item for kw in ("thc", "cannabis", "weed")):
+        return "substances"
+    if category in ("smoking", "alcohol"):
+        return "substances"
+    if parent_category in ("smoking", "alcohol"):
+        return "substances"
+    if category == "pets" and item in ("dogshit", "dogshit_in_bag"):
+        return "pet_waste"
     return "litter"
 
 
-def resolve_new_tags_format(tag_entry):
-    """Handles the documented 'new_tags' shape (nested category/object objects), if present."""
-    formatted = []
-    clo_id = tag_entry.get("category_litter_object_id")
-    category = tag_entry.get("category") or {}
-    obj = tag_entry.get("object") or {}
+def _value_key(value, default="unclassified"):
+    """Return a useful key from either an OLM object or a scalar value."""
+    if isinstance(value, dict):
+        return value.get("key") or value.get("name") or value.get("slug") or default
+    return value if value not in (None, "") else default
 
-    if clo_id is not None:
+
+def resolve_new_tags_format(tag_entry):
+    """Normalize one new_tags entry without dropping entries lacking a CLO id.
+
+    Some API responses contain a complete category/object pair but omit
+    category_litter_object_id.  The old implementation treated those entries
+    as empty, which made valid object points disappear during flattening.
+    """
+    if not isinstance(tag_entry, dict):
+        return []
+
+    formatted = []
+    category = tag_entry.get("category") or {}
+    obj = tag_entry.get("object") or tag_entry.get("item") or {}
+    category_key = _value_key(category)
+    object_key = _value_key(obj)
+
+    has_standard_tag = (
+        tag_entry.get("category_litter_object_id") is not None
+        or tag_entry.get("category_id") is not None
+        or tag_entry.get("object_id") is not None
+        or tag_entry.get("category") is not None
+        or tag_entry.get("object") is not None
+        or tag_entry.get("item") is not None
+    )
+    if has_standard_tag:
         formatted.append({
             "type": "standard",
-            "category": category.get("key", "unclassified"),
-            "item": obj.get("key", "unclassified"),
+            "category": category_key,
+            "item": object_key,
             "quantity": tag_entry.get("quantity", 1),
         })
 
     for extra in tag_entry.get("extra_tags") or []:
-        tag_info = extra.get("tag") or {}
+        if not isinstance(extra, dict):
+            continue
+        tag_info = extra.get("tag") or extra.get("object") or extra.get("item")
         formatted.append({
             "type": extra.get("type", "extra"),
-            "category": extra.get("type", "extra"),
-            "item": tag_info.get("key", "unclassified"),
+            "category": extra.get("category") or extra.get("type", "extra"),
+            "item": _value_key(tag_info),
             "quantity": extra.get("quantity", tag_entry.get("quantity", 1)),
-            "parent_category": category.get("key"),
-            "parent_item": obj.get("key"),
+            "parent_category": category_key,
+            "parent_item": object_key,
         })
     return formatted
 
 
 def resolve_summary_format(tag_entry, keys):
-    """Handles the confirmed real shape: summary.tags[] with numeric IDs resolved via summary.keys."""
-    formatted = []
-    clo_id = tag_entry.get("clo_id")
-    category_name = keys.get("categories", {}).get(str(tag_entry.get("category_id")))
-    object_name = keys.get("objects", {}).get(str(tag_entry.get("object_id")))
+    """Normalize summary.tags[] while retaining entries with partial IDs."""
+    if not isinstance(tag_entry, dict):
+        return []
 
-    if clo_id is not None:
+    formatted = []
+    category_id = tag_entry.get("category_id")
+    object_id = tag_entry.get("object_id")
+    category_name = keys.get("categories", {}).get(str(category_id))
+    object_name = keys.get("objects", {}).get(str(object_id))
+
+    # clo_id is not consistently present; category/object IDs are sufficient
+    # evidence that this is a real standard object.
+    if (
+        tag_entry.get("clo_id") is not None
+        or category_id is not None
+        or object_id is not None
+    ):
         formatted.append({
             "type": "standard",
             "category": category_name or "unclassified",
@@ -93,7 +129,9 @@ def resolve_summary_format(tag_entry, keys):
             "parent_item": object_name,
         })
 
-    for custom_id in tag_entry.get("custom_tags") or []:
+    custom_tags = tag_entry.get("custom_tags") or []
+    custom_ids = list(custom_tags.keys()) if isinstance(custom_tags, dict) else custom_tags
+    for custom_id in custom_ids:
         formatted.append({
             "type": "custom_tag",
             "category": "custom_tag",
@@ -110,8 +148,8 @@ def build_photo_properties(photo):
     formatted_tags = []
     new_tags = photo.get("new_tags")
 
-    if new_tags:
-        for entry in new_tags:
+    if new_tags is not None:
+        for entry in new_tags or []:
             formatted_tags.extend(resolve_new_tags_format(entry))
     else:
         summary = photo.get("summary") or {}
@@ -145,7 +183,6 @@ def get_auth_token(email, password, retries=1, delay=3):
         try:
             print(f"[INFO] Authenticating against OLM ({LOGIN_URL})...")
             response = requests.post(LOGIN_URL, json=payload, headers=headers, timeout=30)
-            
             raw_text = response.text.strip() if response.text else ""
             print(f"[DEBUG Auth] HTTP Status: {response.status_code}")
 
@@ -159,9 +196,7 @@ def get_auth_token(email, password, retries=1, delay=3):
                     print(f"[ERROR] Auth response missing token key. Payload keys: {list(data.keys())}")
                 except json.JSONDecodeError as decode_err:
                     print(f"[ERROR] Failed to parse auth JSON response: {decode_err}")
-            
             print(f"[WARN] Auth attempt failed. Raw response preview: {raw_text[:300]!r}")
-
         except requests.RequestException as exc:
             print(f"[WARN] Auth connection error on attempt {attempt + 1}: {exc}")
 
@@ -175,22 +210,15 @@ def get_auth_token(email, password, retries=1, delay=3):
 
 
 def fetch_photos(token, retries=1, delay=3):
-    """
-    Fetches user photos using the Bearer token with explicit content negotiation.
-    """
-    headers = {
-        "Authorization": f"Bearer {token}",
-        "Accept": "application/json"
-    }
+    """Fetches user photos using the Bearer token with explicit content negotiation."""
+    headers = {"Authorization": f"Bearer {token}", "Accept": "application/json"}
     attempt = 0
 
     while attempt <= retries:
         try:
             print(f"[INFO] Fetching user photos from {PHOTOS_URL} (Attempt {attempt + 1}/{retries + 1})...")
             response = requests.get(PHOTOS_URL, headers=headers, timeout=30)
-            
             raw_text = response.text.strip() if response.text else ""
-
             print(f"[DEBUG Photos] HTTP Status: {response.status_code}")
             print(f"[DEBUG Photos] Content-Type: {response.headers.get('Content-Type')}")
 
@@ -201,12 +229,8 @@ def fetch_photos(token, retries=1, delay=3):
                     print(f"[ERROR] Response body is not valid JSON despite HTTP 200: {decode_err}")
             else:
                 print(f"[WARN] Non-200 HTTP response received: {response.status_code}")
-
         except requests.RequestException as exc:
-            if isinstance(exc, json.JSONDecodeError):
-                print(f"[ERROR] JSON Decode Error caught under RequestException tree: {exc}")
-            else:
-                print(f"[WARN] Network connection failed on attempt {attempt + 1}: {exc}")
+            print(f"[WARN] Network connection failed on attempt {attempt + 1}: {exc}")
 
         attempt += 1
         if attempt <= retries:
@@ -237,21 +261,13 @@ def fetch_and_build_geojson():
             continue
 
         properties = build_photo_properties(photo)
-
-        feature = {
+        features.append({
             "type": "Feature",
-            "geometry": {
-                "type": "Point",
-                "coordinates": [float(coords[0]), float(coords[1])]
-            },
+            "geometry": {"type": "Point", "coordinates": [float(coords[0]), float(coords[1])]},
             "properties": properties
-        }
-        features.append(feature)
+        })
 
-    geojson = {
-        "type": "FeatureCollection",
-        "features": features
-    }
+    geojson = {"type": "FeatureCollection", "features": features}
 
     os.makedirs("data", exist_ok=True)
     out_path = "data/litter.geojson"
