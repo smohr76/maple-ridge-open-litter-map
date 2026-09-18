@@ -5,7 +5,11 @@ import json
 import requests
 
 LOGIN_URL = "https://openlittermap.com/api/auth/token"
-PHOTOS_URL = "https://openlittermap.com/api/v1/user/photos"
+PHOTOS_URL = "https://openlittermap.com/api/v3/user/photos"
+
+# Fail-fast endpoint assertion guard
+assert "v3" in PHOTOS_URL, "PHOTOS_URL must use the v3 endpoint — v1 was removed by OpenLitterMap"
+
 
 def classify_tag_group(tag):  
     category = tag.get("category")  
@@ -24,6 +28,108 @@ def classify_tag_group(tag):
     return "litter"
 
 
+def resolve_new_tags_format(tag_entry):
+    """Handles the documented 'new_tags' shape (nested category/object objects), if present."""
+    formatted = []
+    clo_id = tag_entry.get("category_litter_object_id")
+    category = tag_entry.get("category") or {}
+    obj = tag_entry.get("object") or {}
+
+    if clo_id is not None:
+        formatted.append({
+            "type": "standard",
+            "category": category.get("key", "unclassified"),
+            "item": obj.get("key", "unclassified"),
+            "quantity": tag_entry.get("quantity", 1),
+        })
+
+    for extra in tag_entry.get("extra_tags") or []:
+        tag_info = extra.get("tag") or {}
+        formatted.append({
+            "type": extra.get("type", "extra"),
+            "category": extra.get("type", "extra"),
+            "item": tag_info.get("key", "unclassified"),
+            "quantity": extra.get("quantity", tag_entry.get("quantity", 1)),
+            "parent_category": category.get("key"),
+            "parent_item": obj.get("key"),
+        })
+    return formatted
+
+
+def resolve_summary_format(tag_entry, keys):
+    """Handles the confirmed real shape: summary.tags[] with numeric IDs resolved via summary.keys."""
+    formatted = []
+    clo_id = tag_entry.get("clo_id")
+    category_name = keys.get("categories", {}).get(str(tag_entry.get("category_id")))
+    object_name = keys.get("objects", {}).get(str(tag_entry.get("object_id")))
+
+    if clo_id is not None:
+        formatted.append({
+            "type": "standard",
+            "category": category_name or "unclassified",
+            "item": object_name or "unclassified",
+            "quantity": tag_entry.get("quantity", 1),
+        })
+
+    for mat_id in tag_entry.get("materials") or []:
+        formatted.append({
+            "type": "material",
+            "category": "material",
+            "item": keys.get("materials", {}).get(str(mat_id), "unclassified"),
+            "quantity": tag_entry.get("quantity", 1),
+            "parent_category": category_name,
+            "parent_item": object_name,
+        })
+
+    brands = tag_entry.get("brands")
+    brand_ids = list(brands.keys()) if isinstance(brands, dict) else (brands or [])
+    for brand_id in brand_ids:
+        formatted.append({
+            "type": "brand",
+            "category": "brand",
+            "item": keys.get("brands", {}).get(str(brand_id), "unclassified"),
+            "quantity": tag_entry.get("quantity", 1),
+            "parent_category": category_name,
+            "parent_item": object_name,
+        })
+
+    for custom_id in tag_entry.get("custom_tags") or []:
+        formatted.append({
+            "type": "custom_tag",
+            "category": "custom_tag",
+            "item": keys.get("custom_tags", {}).get(str(custom_id), "unclassified"),
+            "quantity": tag_entry.get("quantity", 1),
+            "parent_category": category_name,
+            "parent_item": object_name,
+        })
+
+    return formatted
+
+
+def build_photo_properties(photo):
+    formatted_tags = []
+    new_tags = photo.get("new_tags")
+
+    if new_tags:
+        for entry in new_tags:
+            formatted_tags.extend(resolve_new_tags_format(entry))
+    else:
+        summary = photo.get("summary") or {}
+        keys = summary.get("keys", {})
+        for entry in summary.get("tags", []):
+            formatted_tags.extend(resolve_summary_format(entry, keys))
+
+    groups = list({classify_tag_group(tag) for tag in formatted_tags}) or ["litter"]
+
+    return {
+        "id": photo.get("id"),
+        "datetime": photo.get("datetime"),
+        "filename": photo.get("filename"),
+        "tags": formatted_tags,
+        "groups": groups,
+    }
+
+
 def get_auth_token(email, password, retries=1, delay=3):
     """
     Authenticates against OLM API and retrieves a fresh Bearer token dynamically.
@@ -39,7 +145,6 @@ def get_auth_token(email, password, retries=1, delay=3):
             
             raw_text = response.text.strip() if response.text else ""
             print(f"[DEBUG Auth] HTTP Status: {response.status_code}")
-            print(f"[DEBUG Auth] Content-Type: {response.headers.get('Content-Type')}")
 
             if response.status_code == 200 and raw_text:
                 try:
@@ -68,12 +173,11 @@ def get_auth_token(email, password, retries=1, delay=3):
 
 def fetch_photos(token, retries=1, delay=3):
     """
-    Fetches user photos using the Bearer token with explicit content negotiation
-    and isolated JSON parsing diagnostic logging.
+    Fetches user photos using the Bearer token with explicit content negotiation.
     """
     headers = {
         "Authorization": f"Bearer {token}",
-        "Accept": "application/json"  # Enforces Laravel API JSON payload routing
+        "Accept": "application/json"
     }
     attempt = 0
 
@@ -84,10 +188,8 @@ def fetch_photos(token, retries=1, delay=3):
             
             raw_text = response.text.strip() if response.text else ""
 
-            # Explicit diagnostic logging
             print(f"[DEBUG Photos] HTTP Status: {response.status_code}")
             print(f"[DEBUG Photos] Content-Type: {response.headers.get('Content-Type')}")
-            print(f"[DEBUG Photos] Raw response preview (first 300 chars): {raw_text[:300]!r}")
 
             if response.status_code == 200 and raw_text:
                 try:
@@ -110,42 +212,6 @@ def fetch_photos(token, retries=1, delay=3):
 
     print("[CRITICAL ERROR] Failed to retrieve valid JSON photo data from OLM API.")
     sys.exit(1)
-
-
-def build_photo_properties(photo):
-    formatted_tags = []
-    raw_tags = photo.get("new_tags") or photo.get("summary", {}).get("tags", [])
-    
-    for tag_entry in raw_tags:
-        clo_id = tag_entry.get("clo_id")
-        
-        # Standalone custom tag fix: skip standard tag emission if clo_id is None
-        if clo_id is not None:
-            formatted_tags.append({
-                "type": "standard",
-                "category": tag_entry.get("category"),
-                "parent_category": tag_entry.get("parent_category"),
-                "item": tag_entry.get("item"),
-                "quantity": tag_entry.get("quantity", 1)
-            })
-            
-        for custom_item in tag_entry.get("custom_tags", []):
-            formatted_tags.append({
-                "type": "custom_tag",
-                "item": custom_item,
-                "quantity": 1
-            })
-
-    # Deduplicate group categories
-    groups = list({classify_tag_group(tag) for tag in formatted_tags})
-
-    return {
-        "id": photo.get("id"),
-        "datetime": photo.get("datetime"),
-        "filename": photo.get("filename"),
-        "tags": formatted_tags,
-        "groups": groups
-    }
 
 
 def fetch_and_build_geojson():
