@@ -1,159 +1,96 @@
 import os
-import sys
 import json
 import requests
 
-OLM_EMAIL = os.getenv("OLM_EMAIL")
-OLM_PASSWORD = os.getenv("OLM_PASSWORD")
-OUTPUT_PATH = "public/data/litter.geojson"
+def classify_tag_group(tag):  
+    category = tag.get("category")  
+    parent_category = tag.get("parent_category")  
+    item = str(tag.get("item", "")).lower()  
+    tag_type = tag.get("type")  
+ 
+    if tag_type == "custom_tag" and any(kw in item for kw in ("thc", "cannabis", "weed")):  
+        return "substances"  
+    if category in ("smoking", "alcohol"):  
+        return "substances"  
+    if parent_category in ("smoking", "alcohol"):  
+        return "substances"  
+    if category == "pets" and item in ("dogshit", "dogshit_in_bag"):  
+        return "pet_waste"  
+    return "litter"
 
-def fetch_and_build_geojson():
-    if not OLM_EMAIL or not OLM_PASSWORD:
-        print("CRITICAL ERROR: OLM_EMAIL or OLM_PASSWORD secrets missing.")
-        sys.exit(1)
-
-    # Step 1: Sanctum Token Negotiation
-    auth_url = "https://openlittermap.com/api/auth/token"
-    auth_headers = {"Content-Type": "application/json", "Accept": "application/json"}
+def build_photo_properties(photo):
+    formatted_tags = []
     
-    auth_res = requests.post(auth_url, json={"email": OLM_EMAIL, "password": OLM_PASSWORD}, headers=auth_headers, timeout=15)
+    # Process raw tags from either key format
+    raw_tags = photo.get("new_tags") or photo.get("summary", {}).get("tags", [])
     
-    if auth_res.status_code not in (200, 201):
-        print(f"CRITICAL ERROR: Auth failed: {auth_res.status_code} - {auth_res.text[:200]}")
-        sys.exit(1)
+    for tag_entry in raw_tags:
+        clo_id = tag_entry.get("clo_id")
+        
+        # Standalone custom tag fix: Only emit standard tag if clo_id exists
+        if clo_id is not None:
+            formatted_tags.append({
+                "type": "standard",
+                "category": tag_entry.get("category"),
+                "parent_category": tag_entry.get("parent_category"),
+                "item": tag_entry.get("item"),
+                "quantity": tag_entry.get("quantity", 1)
+            })
+            
+        # Emit custom tags directly without creating a fake standard parent
+        for custom_item in tag_entry.get("custom_tags", []):
+            formatted_tags.append({
+                "type": "custom_tag",
+                "item": custom_item,
+                "quantity": 1
+            })
 
-    token = auth_res.json().get("token")
-    if not token:
-        print("CRITICAL ERROR: Sanctum token absent in response.")
-        sys.exit(1)
+    # Derive unique groups list using exact classification rules
+    groups = list({classify_tag_group(tag) for tag in formatted_tags})
 
-    # Step 2: Paginated v3 User Photo Ingestion
-    data_url = "https://openlittermap.com/api/v3/user/photos"
-    req_headers = {
-        "Accept": "application/json",
-        "Authorization": f"Bearer {token}",
-        "User-Agent": "MapleRidgeETL/1.0"
+    return {
+        "id": photo.get("id"),
+        "datetime": photo.get("datetime"),
+        "filename": photo.get("filename"),
+        "tags": formatted_tags,
+        "groups": groups
     }
 
-    photos = []
-    page = 1
-    max_pages = 50
+def fetch_and_build_geojson():
+    # Adjust URL or API endpoint based on your OpenLitterMap setup
+    url = os.environ.get("OLM_API_URL", "https://openlittermap.com/api/v1/user/photos")
+    response = requests.get(url)
+    response.raise_for_status()
+    data = response.json()
 
-    while page <= max_pages:
-        res = requests.get(data_url, headers=req_headers, params={"per_page": 100, "page": page}, timeout=20)
-
-        if res.status_code != 200:
-            print(f"CRITICAL ERROR: Endpoint returned status {res.status_code}")
-            sys.exit(1)
-
-        try:
-            payload = res.json()
-        except json.JSONDecodeError:
-            print("CRITICAL ERROR: Failed to parse JSON response.")
-            sys.exit(1)
-
-        page_photos = payload.get("photos", [])
-        if not isinstance(page_photos, list) or len(page_photos) == 0:
-            break
-
-        photos.extend(page_photos)
-
-        pagination = payload.get("pagination", {})
-        last_page = pagination.get("last_page")
-        if last_page is not None and page >= int(last_page):
-            break
-
-        page += 1
-
-    if len(photos) == 0:
-        print("CRITICAL ERROR: Zero photos retrieved.")
-        sys.exit(1)
-
-    # Step 3: Map Spatial Records & Normalize Nested Tags
     features = []
-    for photo in photos:
-        lat = photo.get("lat")
-        lon = photo.get("lon")
+    photos = data.get("photos", []) if isinstance(data, dict) else data
 
-        if lat is None or lon is None:
+    for photo in photos:
+        coords = photo.get("geometry", {}).get("coordinates") or [photo.get("lon"), photo.get("lat")]
+        if not coords or coords[0] is None or coords[1] is None:
             continue
 
-        raw_tags = photo.get("new_tags") or []
-        formatted_tags = []
+        properties = build_photo_properties(photo)
 
-        for tag in raw_tags:
-            if not isinstance(tag, dict):
-                continue
+        feature = {
+            "type": "Feature",
+            "geometry": {
+                "type": "Point",
+                "coordinates": [float(coords[0]), float(coords[1])]
+            },
+            "properties": properties
+        }
+        features.append(feature)
 
-            category = tag.get("category") or {}
-            litter_object = tag.get("object") or {}
-
-            parent_tag = {
-                "category": category.get("key") or category.get("name") or "unclassified",
-                "item": litter_object.get("key") or litter_object.get("name") or "unclassified",
-                "quantity": tag.get("quantity", 1),
-                "picked_up": tag.get("picked_up", False),
-                "type": "standard"
-            }
-            formatted_tags.append(parent_tag)
-
-            child_tags = tag.get("extra_tags") or []
-            for child in child_tags:
-                if not isinstance(child, dict):
-                    continue
-
-                child_tag = child.get("tag") or {}
-
-                formatted_tags.append({
-                    "category": child.get("type") or "extra",
-                    "item": (
-                        child_tag.get("key")
-                        or child_tag.get("name")
-                        or child.get("key")
-                        or child.get("name")
-                        or "unclassified"
-                    ),
-                    "quantity": child.get("quantity", tag.get("quantity", 1)),
-                    "picked_up": child.get("picked_up", tag.get("picked_up", False)),
-                    "type": child.get("type") or "extra",
-                    "parent_category": parent_tag["category"],
-                    "parent_item": parent_tag["item"]
-                })
-
-        try:
-            feature = {
-                "type": "Feature",
-                "geometry": {
-                    "type": "Point",
-                    "coordinates": [float(lon), float(lat)]
-                },
-                "properties": {
-                    "id": photo.get("id"),
-                    "datetime": photo.get("datetime"),
-                    "filename": photo.get("filename"),
-                    "summary": photo.get("summary", []),
-                    "tags": formatted_tags
-                }
-            }
-            features.append(feature)
-        except (ValueError, TypeError) as err:
-            print(f"WARNING: Skipping invalid feature ({lat}, {lon}): {err}")
-
-    if len(features) == 0:
-        print("CRITICAL ERROR: Zero valid GeoJSON features generated.")
-        sys.exit(1)
-
-    # Step 4: Construct GeoJSON Document and Write to Disk
-    geojson_doc = {
+    geojson = {
         "type": "FeatureCollection",
         "features": features
     }
 
-    os.makedirs(os.path.dirname(OUTPUT_PATH), exist_ok=True)
-    with open(OUTPUT_PATH, "w", encoding="utf-8") as f:
-        json.dump(geojson_doc, f, indent=2, ensure_ascii=False)
-
-    print(f"SUCCESS: Written {len(features)} spatial features to {OUTPUT_PATH}.")
+    os.makedirs("data", exist_ok=True)
+    with open("data/litter.geojson", "w", encoding="utf-8") as f:
+        json.dump(geojson, f, indent=2)
 
 if __name__ == "__main__":
     fetch_and_build_geojson()
