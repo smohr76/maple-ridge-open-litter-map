@@ -11,7 +11,7 @@ jobs:
     runs-on: ubuntu-latest
 
     permissions:
-      contents: write # Grants write access to push updated litter.geojson
+      contents: write # Grants write access to push updated litter.geojson files
 
     steps:
       - name: Checkout Repository
@@ -27,41 +27,23 @@ jobs:
           python -m pip install --upgrade pip
           pip install requests
 
-      - name: Validate Authentication Secrets
+      - name: Execute OLM Data Sync Pipeline
         env:
           OLM_EMAIL: ${{ secrets.OLM_EMAIL }}
           OLM_PASSWORD: ${{ secrets.OLM_PASSWORD }}
-        run: |
-          python - <<'PY'
-          import os
+        run: python scripts/sync_data.py
 
-          email = os.getenv("OLM_EMAIL", "").strip()
-          password = os.getenv("OLM_PASSWORD", "").strip()
-
-          if not email:
-              raise SystemExit("[CRITICAL ERROR] OLM_EMAIL secret is unpopulated or missing.")
-          if not password:
-              raise SystemExit("[CRITICAL ERROR] OLM_PASSWORD secret is unpopulated or missing.")
-
-          print("[SUCCESS] Credentials present. Proceeding with authentication.")
-          PY
-
-      - name: Execute OLM Pipeline
-        env:
-          OLM_EMAIL: ${{ secrets.OLM_EMAIL }}
-          OLM_PASSWORD: ${{ secrets.OLM_PASSWORD }}
-        run: python scripts/fetch_olm.py
-
-      - name: Commit and Push Updated GeoJSON
+      - name: Commit and Push Canonical GeoJSON Updates
         run: |
           git config --global user.name "github-actions[bot]"
           git config --global user.email "github-actions[bot]@users.noreply.github.com"
-          git add data/litter.geojson
           
-          # Skip commit if GeoJSON payload is unchanged
+          # Stage both canonical GeoJSON paths
+          git add data/litter.geojson public/data/litter.geojson 2>/dev/null || true
+
           if git diff --staged --quiet; then
-            echo "[INFO] No changes detected in data/litter.geojson. Skipping commit."
+            echo "[INFO] No changes detected in GeoJSON datasets. Skipping commit."
           else
-            git commit -m "chore(data): auto-update litter.geojson via sync job [skip ci]"
+            git commit -m "chore(data): auto-update canonical litter.geojson datasets [skip ci]"
             git push
           fi
