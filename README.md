@@ -110,7 +110,7 @@ With the core ETL pipeline and baseline visualization fully operational, Stage 2
 
 
 --------------------------------------------------------------------------------------
-Next Steps: Production-Quality Hardening
+# Next Steps: Production-Quality Hardening
 
 The current application is fully functional and suitable for the project’s intended use. The next development phase will focus on improving reliability, maintainability, accessibility, and automated quality control.
 
