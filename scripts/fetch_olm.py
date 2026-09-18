@@ -8,7 +8,7 @@ OLM_EMAIL = os.getenv("OLM_EMAIL")
 OLM_PASSWORD = os.getenv("OLM_PASSWORD")
 
 def obtain_sanctum_token():
-    """Exchanges credentials for a Sanctum Bearer Token using the verified endpoint."""
+    """Exchanges credentials for a Sanctum Bearer Token."""
     if not OLM_EMAIL or not OLM_PASSWORD:
         print("Error: OLM_EMAIL or OLM_PASSWORD environment variables are missing.")
         return None
@@ -27,7 +27,7 @@ def obtain_sanctum_token():
     print(f"Authenticating against {auth_url} for user: {OLM_EMAIL[:3]}***")
     try:
         res = requests.post(auth_url, json=payload, headers=headers, timeout=15)
-        if res.status_code in (200, 201):
+        if res.status_code in (200, 201) and res.text.strip():
             data = res.json()
             token = data.get("token")
             if token:
@@ -40,31 +40,47 @@ def obtain_sanctum_token():
     return None
 
 def fetch_user_photos(token):
-    """Fetches user photos using the acquired Bearer token."""
+    """Queries user profile and photo endpoints with fallback mechanisms."""
     headers = {
         "Accept": "application/json",
         "Authorization": f"Bearer {token}",
         "User-Agent": "MapleRidgeETL/1.0"
     }
     
-    # Primary authenticated endpoint
-    url = "https://openlittermap.com/api/v1/user/photos"
-    print(f"Fetching authenticated photos from {url}...")
+    # Primary and fallback endpoints to attempt
+    endpoints = [
+        "https://openlittermap.com/api/v1/user",
+        "https://openlittermap.com/api/v1/user/photos"
+    ]
 
-    try:
-        res = requests.get(url, headers=headers, timeout=20)
-        print(f"HTTP Status Code: {res.status_code}")
+    for url in endpoints:
+        print(f"Fetching data from {url}...")
+        try:
+            res = requests.get(url, headers=headers, timeout=20)
+            print(f"HTTP Status Code: {res.status_code}")
 
-        if res.status_code == 200 and res.text.strip():
-            payload = res.json()
-            # Extract list from paginated object or root array
-            items = payload.get("data", []) if isinstance(payload, dict) else payload
-            print(f"Successfully retrieved {len(items)} raw user records.")
-            return items
-        else:
-            print(f"API request failed with status {res.status_code}. Response: {res.text[:150]}")
-    except Exception as err:
-        print(f"API fetch exception: {err}")
+            # Verify response is non-empty before JSON parsing
+            if res.status_code == 200 and res.text and res.text.strip():
+                try:
+                    payload = res.json()
+                    
+                    # Case 1: Direct list of photos
+                    if isinstance(payload, list) and len(payload) > 0:
+                        print(f"Retrieved {len(payload)} records from list response.")
+                        return payload
+                    
+                    # Case 2: Dict response containing 'photos' or 'data' key
+                    if isinstance(payload, dict):
+                        photos = payload.get("photos") or payload.get("data") or payload.get("user", {}).get("photos", [])
+                        if isinstance(photos, list) and len(photos) > 0:
+                            print(f"Retrieved {len(photos)} records from dict payload.")
+                            return photos
+                except json.JSONDecodeError:
+                    print(f"Warning: Non-JSON body received from {url}.")
+            else:
+                print(f"Empty or invalid body from {url}.")
+        except Exception as err:
+            print(f"Request exception for {url}: {err}")
 
     return []
 
