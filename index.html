@@ -54,66 +54,78 @@
 
     map.addControl(new maplibregl.NavigationControl(), 'top-right');
 
+    async function loadGeoJsonData() {
+      // Fetch path attempting primary path with fallback for build targets
+      let response = await fetch('./data/litter.geojson');
+      if (!response.ok) {
+        response = await fetch('./public/data/litter.geojson');
+      }
+      return await response.json();
+    }
+
     map.on('load', async () => {
-      // Fetch GeoJSON payload directly for bounds calculation and map injection
-      const response = await fetch('./data/litter.geojson');
-      const data = await response.json();
+      try {
+        const data = await loadGeoJsonData();
 
-      document.getElementById('feature-count').innerText = `Total Points: ${data.features.length}`;
+        document.getElementById('feature-count').innerText = `Total Points: ${data.features.length}`;
 
-      map.addSource('litter-data', {
-        type: 'geojson',
-        data: data
-      });
-
-      // Render Circle Vector Layer with categorical color expressions
-      map.addLayer({
-        id: 'litter-points',
-        type: 'circle',
-        source: 'litter-data',
-        paint: {
-          'circle-radius': 8,
-          'circle-color': [
-            'case',
-            ['boolean', ['get', 'has_substances'], false], '#dc2626',
-            ['boolean', ['get', 'has_pet_waste'], false], '#d97706',
-            '#16a34a'
-          ],
-          'circle-stroke-width': 2,
-          'circle-stroke-color': '#ffffff'
-        }
-      });
-
-      // Auto-fit camera bounds to display ALL geographic data points
-      if (data.features.length > 0) {
-        const bounds = new maplibregl.LngLatBounds();
-        data.features.forEach(feature => {
-          bounds.extend(feature.geometry.coordinates);
+        map.addSource('litter-data', {
+          type: 'geojson',
+          data: data
         });
-        map.fitBounds(bounds, { padding: 50, maxZoom: 15 });
-      }
 
-      // Filter Evaluation Engine using flat boolean properties
-      function updateMapFilter() {
-        const checkedFilters = Array.from(document.querySelectorAll('.category-filter:checked'))
-          .map(cb => cb.value);
+        // Circle Layer rendering driven by explicit boolean feature flags
+        map.addLayer({
+          id: 'litter-points',
+          type: 'circle',
+          source: 'litter-data',
+          paint: {
+            'circle-radius': 8,
+            'circle-color': [
+              'case',
+              ['boolean', ['get', 'has_substances'], false], '#dc2626',
+              ['boolean', ['get', 'has_pet_waste'], false], '#d97706',
+              '#16a34a'
+            ],
+            'circle-stroke-width': 2,
+            'circle-stroke-color': '#ffffff'
+          }
+        });
 
-        if (checkedFilters.length === 0) {
-          map.setFilter('litter-points', ['literal', false]);
-          return;
+        // Auto-fit bounds to display all loaded features on view load
+        if (data.features.length > 0) {
+          const bounds = new maplibregl.LngLatBounds();
+          data.features.forEach(feature => {
+            bounds.extend(feature.geometry.coordinates);
+          });
+          map.fitBounds(bounds, { padding: 50, maxZoom: 15 });
         }
 
-        // Logical OR match across boolean property flags
-        const filterConditions = checkedFilters.map(flag => [
-          '==', ['get', flag], true
-        ]);
+        // Checkbox filtering using boolean property evaluation
+        function updateMapFilter() {
+          const checkedFilters = Array.from(document.querySelectorAll('.category-filter:checked'))
+            .map(cb => cb.value);
 
-        map.setFilter('litter-points', ['any', ...filterConditions]);
+          if (checkedFilters.length === 0) {
+            map.setFilter('litter-points', ['literal', false]);
+            return;
+          }
+
+          const filterConditions = checkedFilters.map(flag => [
+            '==', ['get', flag], true
+          ]);
+
+          map.setFilter('litter-points', ['any', ...filterConditions]);
+        }
+
+        document.querySelectorAll('.category-filter').forEach(checkbox => {
+          checkbox.addEventListener('change', updateMapFilter);
+        });
+
+      } catch (err) {
+        console.error('Failed to load GeoJSON dataset:', err);
+        document.getElementById('feature-count').innerText = 'Error loading dataset';
       }
-
-      document.querySelectorAll('.category-filter').forEach(checkbox => {
-        checkbox.addEventListener('change', updateMapFilter);
-      });
     });
   </script>
 </body>
