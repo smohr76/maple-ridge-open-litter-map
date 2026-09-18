@@ -1,4 +1,4 @@
-# Maple Ridge OpenLitterMap GIS Pipeline
+# Maple Ridge OpenLitterMap GIS Pipeline - Update September 17, 2026
 
 This repository hosts an automated, zero-cost geospatial ETL pipeline and interactive web visualization for personal OpenLitterMap (OLM) data contributions in Maple Ridge, British Columbia.
 
