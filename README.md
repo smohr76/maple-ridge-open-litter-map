@@ -108,5 +108,26 @@ With the core ETL pipeline and baseline visualization fully operational, Stage 2
 
 * **Rich Spatial Popups & Media Links**: Enhance interactive map nodes with contextual modal popups displaying detailed item tags, brand categorization, and high-resolution photo asset previews sourced directly from OLM storage.
 
+* --------------------------------------------------------------------------------------
+* Next Steps: Production-Quality Hardening
+
+The current application is fully functional and suitable for the project’s intended use. The next development phase will focus on improving reliability, maintainability, accessibility, and automated quality control.
+
+Planned improvements include:
+
+    Add unit tests for API response parsing, tag normalization, classification, coordinate validation, and GeoJSON generation.
+    Strengthen API error handling with retries, exponential backoff, rate-limit support, and explicit failure behavior.
+    Validate API responses, latitude/longitude ranges, and generated GeoJSON before publishing updates.
+    Prevent incomplete datasets from overwriting the existing production data.
+    Write GeoJSON files atomically to avoid partial files if a workflow is interrupted.
+    Add Python type hints, structured logging, dependency pinning, and automated linting.
+    Add CI quality gates for tests, Python linting, HTML validation, JavaScript validation, and GeoJSON schema validation.
+    Improve the map interface’s accessibility with semantic form controls, keyboard support, ARIA status messaging, and a non-map data summary.
+    Add MapLibre error handling and clearer user-facing messages when the basemap or dataset cannot be loaded.
+    Review external CDN dependencies and consider Subresource Integrity, a Content Security Policy, and pinned action versions.
+    Reduce duplication between the canonical and deployed GeoJSON paths where practical.
+
+These improvements will preserve the current low-cost architecture while making the ETL pipeline and web client more resilient, testable, secure, and maintainable.
+
 
 * **Automated Data Validation & Metric Badging**: Add schema validation tests (e.g., GeoJSON validation via `jsonschema` or `turf`) into the CI pipeline, alongside dynamic README badges displaying live dataset statistics (e.g., total point counts, last sync date).
