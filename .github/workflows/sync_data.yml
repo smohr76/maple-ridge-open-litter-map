@@ -2,14 +2,12 @@ name: Sync OpenLitterMap Data
 
 on:
   schedule:
-    - cron: '0 0 * * *'  # Runs daily at 00:00 UTC
-  workflow_dispatch:      # Enables manual trigger in Actions tab
+    - cron: '0 0 * * *'  # Runs daily at midnight
+  workflow_dispatch:      # Allows manual triggers from GitHub Actions UI
 
 jobs:
   build-and-sync:
     runs-on: ubuntu-latest
-    permissions:
-      contents: write     # Permits automated commits back to main branch
 
     steps:
       - name: Checkout Source Code
@@ -25,6 +23,14 @@ jobs:
           python -m pip install --upgrade pip
           pip install requests
 
+      # --- DIAGNOSTIC TEST STEP ---
+      - name: Run Authentication Diagnostic Test
+        env:
+          OLM_EMAIL: ${{ secrets.OLM_EMAIL }}
+          OLM_PASSWORD: ${{ secrets.OLM_PASSWORD }}
+        run: python tests/test_auth.py
+
+      # --- MAIN PIPELINE STEP ---
       - name: Execute ETL Extraction Script
         env:
           OLM_EMAIL: ${{ secrets.OLM_EMAIL }}
