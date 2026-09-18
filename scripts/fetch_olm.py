@@ -26,28 +26,36 @@ def classify_tag_group(tag):
 
 def get_auth_token(email, password, retries=1, delay=3):
     """
-    Authenticates against OLM API and retrieves a fresh Bearer token.
+    Authenticates against OLM API and retrieves a fresh Bearer token dynamically.
     """
     payload = {"email": email, "password": password}
+    headers = {"Accept": "application/json"}
     attempt = 0
 
     while attempt <= retries:
         try:
             print(f"[INFO] Authenticating against OLM ({LOGIN_URL})...")
-            response = requests.post(LOGIN_URL, json=payload, timeout=30)
+            response = requests.post(LOGIN_URL, json=payload, headers=headers, timeout=30)
             
-            if response.status_code == 200 and response.text.strip():
-                data = response.json()
-                token = data.get("token") or data.get("access_token")
-                if token:
-                    print("[SUCCESS] Successfully obtained OLM session token.")
-                    return token
-                print("[ERROR] Auth response missing token key.")
+            raw_text = response.text.strip() if response.text else ""
+            print(f"[DEBUG Auth] HTTP Status: {response.status_code}")
+            print(f"[DEBUG Auth] Content-Type: {response.headers.get('Content-Type')}")
+
+            if response.status_code == 200 and raw_text:
+                try:
+                    data = response.json()
+                    token = data.get("token") or data.get("access_token")
+                    if token:
+                        print("[SUCCESS] Successfully obtained OLM session token.")
+                        return token
+                    print(f"[ERROR] Auth response missing token key. Payload keys: {list(data.keys())}")
+                except json.JSONDecodeError as decode_err:
+                    print(f"[ERROR] Failed to parse auth JSON response: {decode_err}")
             
-            print(f"[WARN] Auth failed with status {response.status_code}: {response.text[:200]}")
+            print(f"[WARN] Auth attempt failed. Raw response preview: {raw_text[:300]!r}")
 
         except requests.RequestException as exc:
-            print(f"[WARN] Auth connection failed on attempt {attempt + 1}: {exc}")
+            print(f"[WARN] Auth connection error on attempt {attempt + 1}: {exc}")
 
         attempt += 1
         if attempt <= retries:
@@ -60,30 +68,47 @@ def get_auth_token(email, password, retries=1, delay=3):
 
 def fetch_photos(token, retries=1, delay=3):
     """
-    Fetches user photos using the temporary Bearer token.
+    Fetches user photos using the Bearer token with explicit content negotiation
+    and isolated JSON parsing diagnostic logging.
     """
-    headers = {"Authorization": f"Bearer {token}"}
+    headers = {
+        "Authorization": f"Bearer {token}",
+        "Accept": "application/json"  # Enforces Laravel API JSON payload routing
+    }
     attempt = 0
 
     while attempt <= retries:
         try:
-            print(f"[INFO] Fetching user photos from {PHOTOS_URL}...")
+            print(f"[INFO] Fetching user photos from {PHOTOS_URL} (Attempt {attempt + 1}/{retries + 1})...")
             response = requests.get(PHOTOS_URL, headers=headers, timeout=30)
             
-            if response.status_code == 200 and response.text.strip():
-                return response.json()
+            raw_text = response.text.strip() if response.text else ""
 
-            print(f"[WARN] Data fetch failed with status {response.status_code}: {response.text[:200]}")
+            # Explicit diagnostic logging
+            print(f"[DEBUG Photos] HTTP Status: {response.status_code}")
+            print(f"[DEBUG Photos] Content-Type: {response.headers.get('Content-Type')}")
+            print(f"[DEBUG Photos] Raw response preview (first 300 chars): {raw_text[:300]!r}")
+
+            if response.status_code == 200 and raw_text:
+                try:
+                    return response.json()
+                except json.JSONDecodeError as decode_err:
+                    print(f"[ERROR] Response body is not valid JSON despite HTTP 200: {decode_err}")
+            else:
+                print(f"[WARN] Non-200 HTTP response received: {response.status_code}")
 
         except requests.RequestException as exc:
-            print(f"[WARN] Data request failed on attempt {attempt + 1}: {exc}")
+            if isinstance(exc, json.JSONDecodeError):
+                print(f"[ERROR] JSON Decode Error caught under RequestException tree: {exc}")
+            else:
+                print(f"[WARN] Network connection failed on attempt {attempt + 1}: {exc}")
 
         attempt += 1
         if attempt <= retries:
             print(f"[INFO] Retrying data fetch in {delay}s...")
             time.sleep(delay)
 
-    print("[CRITICAL ERROR] Failed to retrieve valid photo data from OLM API.")
+    print("[CRITICAL ERROR] Failed to retrieve valid JSON photo data from OLM API.")
     sys.exit(1)
 
 
@@ -111,7 +136,7 @@ def build_photo_properties(photo):
                 "quantity": 1
             })
 
-    # Deduplicate derived category groups
+    # Deduplicate group categories
     groups = list({classify_tag_group(tag) for tag in formatted_tags})
 
     return {
