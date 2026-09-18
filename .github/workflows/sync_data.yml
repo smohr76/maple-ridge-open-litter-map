@@ -1,53 +1,49 @@
-name: Sync OpenLitterMap Data
+name: Sync OpenLitterMap GeoJSON Data
 
 on:
   schedule:
-    - cron: '0 0 * * *'  # Runs daily at midnight
-  workflow_dispatch:      # Allows manual triggers from GitHub Actions UI
+    # Runs automatically every 12 hours
+    - cron: '0 */12 * * *'
+  workflow_dispatch: # Allows manual pipeline execution from GitHub UI
 
 jobs:
-  build-and-sync:
+  sync-geojson:
     runs-on: ubuntu-latest
 
+    permissions:
+      contents: write # Required to commit and push updated data back to repository
+
     steps:
-      - name: Checkout Source Code
+      - name: Checkout Repository
         uses: actions/checkout@v4
 
       - name: Set up Python Environment
         uses: actions/setup-python@v5
         with:
           python-version: '3.11'
+          cache: 'pip'
 
       - name: Install Dependencies
         run: |
           python -m pip install --upgrade pip
           pip install requests
 
-      # --- DIAGNOSTIC TEST STEP ---
-      - name: Run Authentication Diagnostic Test
+      - name: Execute OLM Data Pipeline
         env:
-          OLM_EMAIL: ${{ secrets.OLM_EMAIL }}
-          OLM_PASSWORD: ${{ secrets.OLM_PASSWORD }}
-        run: python tests/test_auth.py
-
-      # TEMPORARY DIAGNOSTIC STEP
-      - name: Run API Endpoint Diagnostics
-        env:
-          OLM_EMAIL: ${{ secrets.OLM_EMAIL }}
-          OLM_PASSWORD: ${{ secrets.OLM_PASSWORD }}
-        run: python scripts/debug_api.py
-
-      # --- MAIN PIPELINE STEP ---
-      - name: Execute ETL Extraction Script
-        env:
-          OLM_EMAIL: ${{ secrets.OLM_EMAIL }}
-          OLM_PASSWORD: ${{ secrets.OLM_PASSWORD }}
+          OLM_API_URL: ${{ secrets.OLM_API_URL }}
+          OLM_API_TOKEN: ${{ secrets.OLM_API_TOKEN }}
         run: python scripts/fetch_olm.py
 
-      - name: Commit Updated GeoJSON Payload
+      - name: Commit and Push Updated GeoJSON
         run: |
           git config --global user.name "github-actions[bot]"
           git config --global user.email "github-actions[bot]@users.noreply.github.com"
-          git add public/data/litter.geojson
-          git diff-index --quiet HEAD || git commit -m "chore: automated OpenLitterMap data sync"
-          git push
+          git add data/litter.geojson
+          
+          # Only create a commit if data/litter.geojson has actually changed
+          if git diff --staged --quiet; then
+            echo "[INFO] No changes detected in data/litter.geojson. Skipping commit."
+          else
+            git commit -m "chore(data): auto-update litter.geojson via sync job [skip ci]"
+            git push
+          fi
