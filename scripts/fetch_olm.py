@@ -1,128 +1,129 @@
 import os
-import json
 import sys
+import json
 import requests
 
-OUTPUT_PATH = "public/data/litter.geojson"
 OLM_EMAIL = os.getenv("OLM_EMAIL")
 OLM_PASSWORD = os.getenv("OLM_PASSWORD")
+OUTPUT_PATH = "public/data/litter.geojson"
 
-def obtain_sanctum_token():
-    """Exchanges credentials for a Sanctum Bearer Token."""
+def fetch_and_build_geojson():
     if not OLM_EMAIL or not OLM_PASSWORD:
-        print("Error: OLM_EMAIL or OLM_PASSWORD environment variables are missing.")
-        return None
+        print("CRITICAL ERROR: OLM_EMAIL or OLM_PASSWORD secrets are missing from the runtime environment.")
+        sys.exit(1)
 
+    # Step 1: Negotiate Sanctum Token
     auth_url = "https://openlittermap.com/api/auth/token"
-    payload = {
-        "email": OLM_EMAIL,
-        "password": OLM_PASSWORD
-    }
-    headers = {
-        "Content-Type": "application/json",
-        "Accept": "application/json",
-        "User-Agent": "MapleRidgeETL/1.0"
-    }
-
-    print(f"Authenticating against {auth_url} for user: {OLM_EMAIL[:3]}***")
-    try:
-        res = requests.post(auth_url, json=payload, headers=headers, timeout=15)
-        if res.status_code in (200, 201) and res.text.strip():
-            data = res.json()
-            token = data.get("token")
-            if token:
-                print("Sanctum Bearer Token successfully acquired.")
-                return token
-        print(f"Auth failed with status {res.status_code}: {res.text[:150]}")
-    except Exception as err:
-        print(f"Authentication exception: {err}")
+    auth_headers = {"Content-Type": "application/json", "Accept": "application/json"}
     
-    return None
+    print("Authenticating with OpenLitterMap API...")
+    auth_res = requests.post(auth_url, json={"email": OLM_EMAIL, "password": OLM_PASSWORD}, headers=auth_headers, timeout=15)
+    
+    if auth_res.status_code not in (200, 201):
+        print(f"CRITICAL ERROR: Authentication failed with status {auth_res.status_code}: {auth_res.text[:200]}")
+        sys.exit(1)
 
-def fetch_user_photos(token):
-    """Queries user profile and photo endpoints with fallback mechanisms."""
-    headers = {
+    token = auth_res.json().get("token")
+    if not token:
+        print("CRITICAL ERROR: Sanctum authentication token not found in response payload.")
+        sys.exit(1)
+
+    print("Authentication successful.")
+
+    # Step 2: Paginated Fetch from API v3 Endpoint
+    data_url = "https://openlittermap.com/api/v3/user/photos"
+    req_headers = {
         "Accept": "application/json",
         "Authorization": f"Bearer {token}",
         "User-Agent": "MapleRidgeETL/1.0"
     }
-    
-    # Primary and fallback endpoints to attempt
-    endpoints = [
-        "https://openlittermap.com/api/v1/user",
-        "https://openlittermap.com/api/v1/user/photos"
-    ]
 
-    for url in endpoints:
-        print(f"Fetching data from {url}...")
+    photos = []
+    page = 1
+    max_pages = 50  # Hard safety cap (5,000 photos max) to prevent infinite loops
+
+    while page <= max_pages:
+        print(f"Requesting data from: {data_url} (page {page})")
+        res = requests.get(data_url, headers=req_headers, params={"per_page": 100, "page": page}, timeout=20)
+
+        if res.status_code != 200:
+            print(f"CRITICAL ERROR: Data endpoint returned status {res.status_code}: {res.text[:200]}")
+            sys.exit(1)
+
         try:
-            res = requests.get(url, headers=headers, timeout=20)
-            print(f"HTTP Status Code: {res.status_code}")
+            payload = res.json()
+        except json.JSONDecodeError:
+            print(f"CRITICAL ERROR: Failed to parse response as JSON. Content-Type: {res.headers.get('Content-Type')}")
+            sys.exit(1)
 
-            # Verify response is non-empty before JSON parsing
-            if res.status_code == 200 and res.text and res.text.strip():
-                try:
-                    payload = res.json()
-                    
-                    # Case 1: Direct list of photos
-                    if isinstance(payload, list) and len(payload) > 0:
-                        print(f"Retrieved {len(payload)} records from list response.")
-                        return payload
-                    
-                    # Case 2: Dict response containing 'photos' or 'data' key
-                    if isinstance(payload, dict):
-                        photos = payload.get("photos") or payload.get("data") or payload.get("user", {}).get("photos", [])
-                        if isinstance(photos, list) and len(photos) > 0:
-                            print(f"Retrieved {len(photos)} records from dict payload.")
-                            return photos
-                except json.JSONDecodeError:
-                    print(f"Warning: Non-JSON body received from {url}.")
-            else:
-                print(f"Empty or invalid body from {url}.")
-        except Exception as err:
-            print(f"Request exception for {url}: {err}")
+        page_photos = payload.get("photos", [])
+        
+        # Break immediately if page returns no records
+        if not isinstance(page_photos, list) or len(page_photos) == 0:
+            print(f"No additional items returned on page {page}. Concluding pagination.")
+            break
 
-    return []
+        photos.extend(page_photos)
 
-def transform_to_geojson(raw_items):
+        # Pagination metadata evaluation
+        pagination = payload.get("pagination", {})
+        last_page = pagination.get("last_page")
+        
+        # Exit if last_page is explicitly specified and reached
+        if last_page is not None and page >= int(last_page):
+            print(f"Reached reported last_page ({last_page}). Concluding pagination.")
+            break
+
+        page += 1
+
+    # Step 3: Validate Non-Empty Payload (Fail-Fast Rule)
+    if len(photos) == 0:
+        print("CRITICAL ERROR: Zero records retrieved from /api/v3/user/photos. Pipeline execution aborted.")
+        sys.exit(1)
+
+    print(f"Retrieved {len(photos)} total photo records from API across {page} request(s).")
+
+    # Step 4: Map Spatial Records to RFC 7946 GeoJSON Features
     features = []
-    for item in raw_items:
-        lat = item.get("lat") or item.get("latitude")
-        lon = item.get("lon") or item.get("longitude")
+    for photo in photos:
+        lat = photo.get("lat")
+        lon = photo.get("lon")
 
-        if lat is not None and lon is not None:
-            features.append({
+        if lat is None or lon is None:
+            continue
+
+        try:
+            feature = {
                 "type": "Feature",
                 "geometry": {
                     "type": "Point",
-                    "coordinates": [float(lon), float(lat)]
+                    "coordinates": [float(lon), float(lat)]  # GeoJSON mandates [Longitude, Latitude]
                 },
                 "properties": {
-                    "id": item.get("id", "N/A"),
-                    "created_at": item.get("created_at", ""),
-                    "photo_url": item.get("filename") or item.get("url", "")
+                    "id": photo.get("id"),
+                    "datetime": photo.get("datetime"),
+                    "filename": photo.get("filename")
                 }
-            })
+            }
+            features.append(feature)
+        except (ValueError, TypeError) as err:
+            print(f"WARNING: Skipping invalid coordinate pair ({lat}, {lon}): {err}")
 
-    return {"type": "FeatureCollection", "features": features}
+    if len(features) == 0:
+        print("CRITICAL ERROR: No valid spatial features could be constructed from photo records.")
+        sys.exit(1)
+
+    geojson_doc = {
+        "type": "FeatureCollection",
+        "features": features
+    }
+
+    # Step 5: Write Payload to Disk
+    os.makedirs(os.path.dirname(OUTPUT_PATH), exist_ok=True)
+    with open(OUTPUT_PATH, "w", encoding="utf-8") as f:
+        json.dump(geojson_doc, f, indent=2)
+
+    print(f"SUCCESS: Successfully processed {len(features)} spatial features to {OUTPUT_PATH}.")
 
 if __name__ == "__main__":
-    token = obtain_sanctum_token()
-    raw_data = fetch_user_photos(token) if token else []
-    
-    if not raw_data:
-        print("Warning: Zero records retrieved from API. Inserting standard fallback seed point.")
-        raw_data = [{
-            "id": "SEED-001",
-            "lat": 49.2193,
-            "lon": -122.6010,
-            "created_at": "2026-09-17T00:00:00Z"
-        }]
-
-    geojson_payload = transform_to_geojson(raw_data)
-
-    os.makedirs(os.path.dirname(OUTPUT_PATH), exist_ok=True)
-    with open(OUTPUT_PATH, "w") as f:
-        json.dump(geojson_payload, f, indent=2)
-
-    print(f"Pipeline Succeeded: Written {len(geojson_payload['features'])} features to {OUTPUT_PATH}")
+    fetch_and_build_geojson()
