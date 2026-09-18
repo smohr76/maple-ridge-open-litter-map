@@ -1,161 +1,122 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-  <meta charset="UTF-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>Maple Ridge Litter Tracker</title>
-  
-  <!-- MapLibre GL CSS -->
-  <link href="https://unpkg.com/maplibre-gl@3.6.2/dist/maplibre-gl.css" rel="stylesheet" />
-  
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Litter Map - Stage 2</title>
+  <script src="https://unpkg.com/maplibre-gl@3.6.0/dist/maplibre-gl.js"></script>
+  <link href="https://unpkg.com/maplibre-gl@3.6.0/dist/maplibre-gl.css" rel="stylesheet" />
   <style>
     body {
       margin: 0;
       padding: 0;
-      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+      font-family: sans-serif;
     }
-    
     #map {
       position: absolute;
       top: 0;
       bottom: 0;
       width: 100%;
     }
-
-    .map-header {
+    .legend-box {
       position: absolute;
       top: 10px;
       left: 10px;
       z-index: 1;
-      background: rgba(255, 255, 255, 0.95);
-      padding: 10px 14px;
+      background: #ffffff;
+      padding: 12px 16px;
       border-radius: 6px;
-      box-shadow: 0 2px 4px rgba(0,0,0,0.2);
+      box-shadow: 0 2px 6px rgba(0,0,0,0.3);
+      font-size: 14px;
+      line-height: 1.6;
     }
-
-    .map-header h1 {
-      margin: 0 0 2px 0;
-      font-size: 16px;
-      color: #333;
+    .legend-box h4 {
+      margin: 0 0 8px 0;
+      font-size: 15px;
     }
-
-    .map-header p {
-      margin: 0;
-      font-size: 12px;
-      color: #666;
-    }
-
-    .maplibregl-popup-content {
-      padding: 12px;
-      max-width: 240px;
-      font-size: 13px;
-      line-height: 1.4;
-    }
-
-    .maplibregl-popup-content ul {
-      margin: 4px 0 0 0;
-      padding-left: 18px;
-    }
-
-    .maplibregl-popup-content li {
-      margin-bottom: 2px;
+    .legend-box label {
+      cursor: pointer;
+      user-select: none;
     }
   </style>
 </head>
 <body>
 
-  <div class="map-header">
-    <h1>Maple Ridge Litter Tracker</h1>
-    <p>Live Sync: OpenLitterMap API</p>
-  </div>
+<div id="legend-box" class="legend-box">
+  <h4>Categories</h4>
+  <label>
+    <input type="checkbox" class="group-filter" value="litter" checked> Litter
+  </label><br>
+  <label>
+    <input type="checkbox" class="group-filter" value="pet_waste" checked> Pet Waste
+  </label><br>
+  <label>
+    <input type="checkbox" class="group-filter" value="substances" checked> Nicotine, THC & Alcohol
+  </label>
+</div>
 
-  <div id="map"></div>
+<div id="map"></div>
 
-  <!-- MapLibre GL JS -->
-  <script src="https://unpkg.com/maplibre-gl@3.6.2/dist/maplibre-gl.js"></script>
-  
-  <script>
-    // Initialize MapLibre GL Map with CARTO Positron Vector Base Style
-    const map = new maplibregl.Map({
-      container: 'map',
-      style: 'https://basemaps.cartocdn.com/gl/positron-gl-style/style.json',
-      center: [-122.6010, 49.2193], // Center over Maple Ridge, BC
-      zoom: 12
+<script>
+  const map = new maplibre-gl.Map({
+    container: 'map',
+    style: 'https://demotiles.maplibre.org/style.json',
+    center: [-122.5615, 49.2095],
+    zoom: 12
+  });
+
+  const activeGroups = new Set(["litter", "pet_waste", "substances"]);
+
+  function updateMapFilter() {
+    const selected = Array.from(activeGroups);
+
+    if (!map.getLayer("unclustered-point")) return;
+
+    if (selected.length === 0) {
+      map.setFilter("unclustered-point", ["literal", false]);
+      return;
+    }
+
+    const filterExpression = [
+      "any",
+      ...selected.map(group => ["in", group, ["get", "groups"]])
+    ];
+
+    map.setFilter("unclustered-point", filterExpression);
+  }
+
+  map.on('load', () => {
+    map.addSource('litter-data', {
+      type: 'geojson',
+      data: './data/litter.geojson'
     });
 
-    map.addControl(new maplibregl.NavigationControl(), 'top-right');
-
-    map.on('load', () => {
-      // Add GeoJSON Vector Source with cache-busting timestamp
-      map.addSource('litter-data', {
-        type: 'geojson',
-        data: `public/data/litter.geojson?v=${Date.now()}`
-      });
-
-      // Add Circle Vector Render Layer
-      map.addLayer({
-        id: 'litter-points',
-        type: 'circle',
-        source: 'litter-data',
-        paint: {
-          'circle-color': '#e63946',
-          'circle-radius': 6,
-          'circle-stroke-width': 1.5,
-          'circle-stroke-color': '#ffffff'
-        }
-      });
-
-      // Interactive Cursor Feedback
-      map.on('mouseenter', 'litter-points', () => {
-        map.getCanvas().style.cursor = 'pointer';
-      });
-
-      map.on('mouseleave', 'litter-points', () => {
-        map.getCanvas().style.cursor = '';
-      });
-
-      // Interactive Feature Popup Logic
-      map.on('click', 'litter-points', (e) => {
-        if (!e.features.length) return;
-
-        const feature = e.features[0];
-        const coords = feature.geometry.coordinates.slice();
-        const props = feature.properties;
-
-        let popupHtml = `<strong>ID:</strong> ${props.id}<br>` +
-                        `<strong>Timestamp:</strong> ${props.datetime || 'N/A'}`;
-
-        // Parse and format nested tag classifications
-        if (props.tags) {
-          const tags = typeof props.tags === 'string'
-            ? JSON.parse(props.tags)
-            : props.tags;
-
-          if (Array.isArray(tags) && tags.length > 0) {
-            popupHtml += `<br><strong>Tags:</strong><ul>`;
-            for (const tag of tags) {
-              popupHtml += `<li>${tag.category}: ${tag.item} × ${tag.quantity}</li>`;
-            }
-            popupHtml += `</ul>`;
-          }
-        }
-
-        // Add photo preview thumbnail
-        if (props.filename) {
-          popupHtml += `<br><img src="${props.filename}" width="160" style="margin-top:6px; border-radius:4px; display:block;" />`;
-        }
-
-        // Ensure popup renders correctly over anti-meridian boundaries
-        while (Math.abs(e.lngLat.lng - coords[0]) > 180) {
-          coords[0] += e.lngLat.lng > coords[0] ? 360 : -360;
-        }
-
-        new maplibregl.Popup()
-          .setLngLat(coords)
-          .setHTML(popupHtml)
-          .addTo(map);
-      });
+    map.addLayer({
+      id: 'unclustered-point',
+      type: 'circle',
+      source: 'litter-data',
+      paint: {
+        'circle-color': '#e63946',
+        'circle-radius': 6,
+        'circle-stroke-width': 1,
+        'circle-stroke-color': '#fff'
+      }
     });
-  </script>
+
+    updateMapFilter();
+  });
+
+  document.querySelectorAll(".group-filter").forEach(checkbox => {
+    checkbox.addEventListener("change", (e) => {
+      const val = e.target.value;
+      if (e.target.checked) {
+        activeGroups.add(val);
+      } else {
+        activeGroups.delete(val);
+      }
+      updateMapFilter();
+    });
+  });
+</script>
 </body>
 </html>
