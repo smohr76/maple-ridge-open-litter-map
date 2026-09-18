@@ -4,48 +4,49 @@ import requests
 OLM_EMAIL = os.getenv("OLM_EMAIL")
 OLM_PASSWORD = os.getenv("OLM_PASSWORD")
 
-def run_diagnostics():
+def debug_routes():
     if not OLM_EMAIL or not OLM_PASSWORD:
-        print("Error: Missing credentials.")
+        print("FAIL: Missing OLM_EMAIL or OLM_PASSWORD secrets.")
         return
 
-    # Step 1: Acquire Token
+    # Auth Phase
     auth_url = "https://openlittermap.com/api/auth/token"
-    headers = {"Content-Type": "application/json", "Accept": "application/json"}
-    auth_res = requests.post(auth_url, json={"email": OLM_EMAIL, "password": OLM_PASSWORD}, headers=headers)
+    auth_res = requests.post(
+        auth_url, 
+        json={"email": OLM_EMAIL, "password": OLM_PASSWORD},
+        headers={"Content-Type": "application/json", "Accept": "application/json"}
+    )
     
     if auth_res.status_code not in (200, 201):
-        print(f"Auth Failed: {auth_res.status_code} - {auth_res.text[:200]}")
+        print(f"Auth failed: {auth_res.status_code} - {auth_res.text[:150]}")
         return
 
     token = auth_res.json().get("token")
-    print(f"Token Acquired: {token[:10]}...")
+    print(f"Token acquired successfully: {token[:8]}***")
 
-    # Step 2: Probe Candidate Endpoints
-    candidate_urls = [
+    # Probe routes
+    routes = [
         "https://openlittermap.com/api/v1/photos",
         "https://openlittermap.com/api/v1/user/photos",
-        "https://openlittermap.com/api/v2/user/photos",
-        "https://openlittermap.com/api/v3/user/photos",
-        "https://openlittermap.com/api/v3/user/profile",
-        "https://openlittermap.com/api/user"
+        "https://openlittermap.com/api/v1/user",
+        "https://openlittermap.com/api/v2/photos"
     ]
 
-    req_headers = {
+    headers = {
         "Accept": "application/json",
         "Authorization": f"Bearer {token}",
-        "User-Agent": "Mozilla/5.0 (ETL Diagnostic)"
+        "User-Agent": "MapleRidgeETL-Debug/1.0"
     }
 
-    for url in candidate_urls:
-        print(f"\n--- Testing: {url} ---")
+    for route in routes:
+        print(f"\n--- Probing Route: {route} ---")
         try:
-            res = requests.get(url, headers=req_headers, timeout=10)
-            content_type = res.headers.get("Content-Type", "Unknown")
-            print(f"Status: {res.status_code} | Content-Type: {content_type}")
-            print(f"Body snippet (first 150 chars): {res.text[:150]}")
-        except Exception as e:
-            print(f"Error requesting {url}: {e}")
+            res = requests.get(route, headers=headers, timeout=10)
+            c_type = res.headers.get("Content-Type", "Unknown")
+            print(f"Status: {res.status_code} | Content-Type: {c_type}")
+            print(f"Body snippet: {res.text[:120]}")
+        except Exception as err:
+            print(f"Request failed: {err}")
 
 if __name__ == "__main__":
-    run_diagnostics()
+    debug_routes()
