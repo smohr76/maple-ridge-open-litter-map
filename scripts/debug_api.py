@@ -6,7 +6,7 @@ OLM_PASSWORD = os.getenv("OLM_PASSWORD")
 
 def run_diagnostics():
     if not OLM_EMAIL or not OLM_PASSWORD:
-        print("CRITICAL: OLM_EMAIL or OLM_PASSWORD secrets are missing from runtime env.")
+        print("CRITICAL: OLM_EMAIL or OLM_PASSWORD secrets missing.")
         return
 
     # Phase 1: Sanctum Token Exchange
@@ -18,18 +18,19 @@ def run_diagnostics():
     auth_res = requests.post(auth_url, json=auth_payload, headers=auth_headers, timeout=15)
     
     if auth_res.status_code not in (200, 201):
-        print(f"Auth Failure - Status: {auth_res.status_code} | Body: {auth_res.text[:150]}")
+        print(f"Auth Failure: {auth_res.status_code} - {auth_res.text[:150]}")
         return
 
     token = auth_res.json().get("token")
     print(f"Authentication Successful. Bearer Token: {token[:8]}***")
 
-    # Phase 2: Endpoint Surface Probing
+    # Phase 2: Probe v3 and alternative OpenLitterMap Endpoints
     candidate_urls = [
-        "https://openlittermap.com/api/v1/photos",
-        "https://openlittermap.com/api/v1/user",
-        "https://openlittermap.com/api/v1/user/photos",
-        "https://openlittermap.com/api/v1/public/photos?page=1"
+        "https://openlittermap.com/api/v3/user/photos",
+        "https://openlittermap.com/api/v3/user/profile",
+        "https://openlittermap.com/api/v3/photos",
+        "https://openlittermap.com/api/user/photos",
+        "https://openlittermap.com/api/user"
     ]
 
     request_headers = {
