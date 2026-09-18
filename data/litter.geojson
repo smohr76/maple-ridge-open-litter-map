@@ -1,0 +1,267 @@
+{
+  "type": "FeatureCollection",
+  "features": [
+    {
+      "type": "Feature",
+      "geometry": {
+        "type": "Point",
+        "coordinates": [
+          -122.56109619141,
+          49.209987640381
+        ]
+      },
+      "properties": {
+        "id": 552999,
+        "datetime": "2026-09-02T19:53:41.000000Z",
+        "filename": "https://olm-s3.s3.eu-west-1.amazonaws.com/2026/09/02/mYPr1JHo8rnlUnwFhHOcR1FQSqVGD5A223Q0mmbk.jpg",
+        "tags": [
+          {
+            "type": "standard",
+            "category": "food",
+            "item": "wrapper",
+            "quantity": 1
+          },
+          {
+            "type": "material",
+            "category": "material",
+            "item": "plastic",
+            "quantity": 1,
+            "parent_category": "food",
+            "parent_item": "wrapper"
+          }
+        ],
+        "groups": [
+          "litter"
+        ]
+      }
+    },
+    {
+      "type": "Feature",
+      "geometry": {
+        "type": "Point",
+        "coordinates": [
+          -122.56114196777,
+          49.209987640381
+        ]
+      },
+      "properties": {
+        "id": 552998,
+        "datetime": "2026-09-02T19:53:48.000000Z",
+        "filename": "https://olm-s3.s3.eu-west-1.amazonaws.com/2026/09/02/muc6PgtspxSLzlbuh7s89YYMmAELphn5ycDOO0GJ.jpg",
+        "tags": [
+          {
+            "type": "standard",
+            "category": "food",
+            "item": "bag",
+            "quantity": 1
+          },
+          {
+            "type": "material",
+            "category": "material",
+            "item": "paper",
+            "quantity": 1,
+            "parent_category": "food",
+            "parent_item": "bag"
+          },
+          {
+            "type": "brand",
+            "category": "brand",
+            "item": "mcdonalds",
+            "quantity": 1,
+            "parent_category": "food",
+            "parent_item": "bag"
+          },
+          {
+            "type": "standard",
+            "category": "food",
+            "item": "container",
+            "quantity": 1
+          },
+          {
+            "type": "material",
+            "category": "material",
+            "item": "paper",
+            "quantity": 1,
+            "parent_category": "food",
+            "parent_item": "container"
+          },
+          {
+            "type": "brand",
+            "category": "brand",
+            "item": "mcdonalds",
+            "quantity": 1,
+            "parent_category": "food",
+            "parent_item": "container"
+          }
+        ],
+        "groups": [
+          "litter"
+        ]
+      }
+    },
+    {
+      "type": "Feature",
+      "geometry": {
+        "type": "Point",
+        "coordinates": [
+          -122.55812835693,
+          49.210037231445
+        ]
+      },
+      "properties": {
+        "id": 552940,
+        "datetime": "2026-08-30T19:26:24.000000Z",
+        "filename": "https://olm-s3.s3.eu-west-1.amazonaws.com/2026/08/30/WU6btr8wI1p4cydSmNsiTYGWPyESdTDP8kP1nCG4.jpg",
+        "tags": [
+          {
+            "type": "standard",
+            "category": "pets",
+            "item": "dogshit",
+            "quantity": 1
+          }
+        ],
+        "groups": [
+          "pet_waste"
+        ]
+      }
+    },
+    {
+      "type": "Feature",
+      "geometry": {
+        "type": "Point",
+        "coordinates": [
+          -122.55902099609,
+          49.205593109131
+        ]
+      },
+      "properties": {
+        "id": 552939,
+        "datetime": "2026-08-30T19:36:44.000000Z",
+        "filename": "https://olm-s3.s3.eu-west-1.amazonaws.com/2026/08/30/ocZ90uPRmnLLFowFvdsMEd0P4LsDOYK8bX9qc5jB.jpg",
+        "tags": [
+          {
+            "type": "standard",
+            "category": "pets",
+            "item": "dogshit",
+            "quantity": 1
+          }
+        ],
+        "groups": [
+          "pet_waste"
+        ]
+      }
+    },
+    {
+      "type": "Feature",
+      "geometry": {
+        "type": "Point",
+        "coordinates": [
+          -122.56114959717,
+          49.21017074585
+        ]
+      },
+      "properties": {
+        "id": 552938,
+        "datetime": "2026-08-30T19:59:50.000000Z",
+        "filename": "https://olm-s3.s3.eu-west-1.amazonaws.com/2026/08/30/LjDf02a6HMD1T0RvBHnp0mogxykugrnXOHhOAt7e.jpg",
+        "tags": [
+          {
+            "type": "standard",
+            "category": "other",
+            "item": "balloon",
+            "quantity": 1
+          }
+        ],
+        "groups": [
+          "litter"
+        ]
+      }
+    },
+    {
+      "type": "Feature",
+      "geometry": {
+        "type": "Point",
+        "coordinates": [
+          -122.56114959717,
+          49.21017074585
+        ]
+      },
+      "properties": {
+        "id": 552937,
+        "datetime": "2026-08-30T19:59:55.000000Z",
+        "filename": "https://olm-s3.s3.eu-west-1.amazonaws.com/2026/08/30/1GAJImAJIsPw8HKB2dhS6hUl5gXJeTCG9S0uqTuX.jpg",
+        "tags": [
+          {
+            "type": "standard",
+            "category": "other",
+            "item": "plastic",
+            "quantity": 1
+          }
+        ],
+        "groups": [
+          "litter"
+        ]
+      }
+    },
+    {
+      "type": "Feature",
+      "geometry": {
+        "type": "Point",
+        "coordinates": [
+          -122.56114959717,
+          49.21017074585
+        ]
+      },
+      "properties": {
+        "id": 552936,
+        "datetime": "2026-08-30T20:00:06.000000Z",
+        "filename": "https://olm-s3.s3.eu-west-1.amazonaws.com/2026/08/30/s8PsfVKyRU4N2Nmzmwm07vW8kdA2bmBcFsjm6m7F.jpg",
+        "tags": [
+          {
+            "type": "standard",
+            "category": "other",
+            "item": "paper",
+            "quantity": 1
+          },
+          {
+            "type": "material",
+            "category": "material",
+            "item": "paper",
+            "quantity": 1,
+            "parent_category": "other",
+            "parent_item": "paper"
+          }
+        ],
+        "groups": [
+          "litter"
+        ]
+      }
+    },
+    {
+      "type": "Feature",
+      "geometry": {
+        "type": "Point",
+        "coordinates": [
+          -122.56114959717,
+          49.21017074585
+        ]
+      },
+      "properties": {
+        "id": 552935,
+        "datetime": "2026-08-30T20:00:52.000000Z",
+        "filename": "https://olm-s3.s3.eu-west-1.amazonaws.com/2026/08/30/Mttb8lRWfkasLpB3S6Rb0KH3heXyPGSRuwCY5egu.jpg",
+        "tags": [
+          {
+            "type": "standard",
+            "category": "other",
+            "item": "plastic",
+            "quantity": 1
+          }
+        ],
+        "groups": [
+          "litter"
+        ]
+      }
+    }
+  ]
+}
