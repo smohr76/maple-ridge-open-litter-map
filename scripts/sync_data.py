@@ -159,38 +159,54 @@ def fetch_all_photos(token):
     }
     
     all_photos = []
-    current_url = PHOTOS_URL
-    page = 1
+    current_page = 1
+    last_page = 1
 
-    while current_url:
-        print(f"[INFO] Fetching page {page} from {current_url}...")
+    while current_page <= last_page:
+        params = {"page": current_page}
+        print(f"[INFO] Requesting page {current_page} of {last_page} from {PHOTOS_URL}...")
+        
         try:
-            response = requests.get(current_url, headers=headers, timeout=30)
+            response = requests.get(PHOTOS_URL, headers=headers, params=params, timeout=30)
             if response.status_code != 200:
-                print(f"[ERROR] HTTP {response.status_code} received on page {page}.")
+                print(f"[ERROR] HTTP {response.status_code} received on page {current_page}.")
                 break
                 
             data = response.json()
             
+            # Extract photo records payload
             if isinstance(data, dict):
                 photos_page = data.get("photos") or data.get("data") or []
-                current_url = data.get("next_page_url") or data.get("links", {}).get("next")
+                
+                # Extract pagination boundary metadata across potential schemas
+                meta = data.get("meta") or {}
+                last_page = (
+                    data.get("last_page") 
+                    or meta.get("last_page") 
+                    or data.get("last_page_number") 
+                    or last_page
+                )
+                
+                # Fallback: check next_page_url if numeric bounds are missing
+                next_url = data.get("next_page_url") or data.get("links", {}).get("next")
+                if next_url and last_page == 1:
+                    last_page = current_page + 1
+
             elif isinstance(data, list):
                 photos_page = data
-                current_url = None
+                last_page = current_page
             else:
                 photos_page = []
-                current_url = None
 
             all_photos.extend(photos_page)
-            print(f"[INFO] Page {page}: fetched {len(photos_page)} photos (Total cumulative: {len(all_photos)}).")
+            print(f"[INFO] Page {current_page}/{last_page}: fetched {len(photos_page)} photos (Cumulative total: {len(all_photos)}).")
             
-            page += 1
-            if current_url:
+            current_page += 1
+            if current_page <= last_page:
                 time.sleep(0.5)
                 
         except requests.RequestException as exc:
-            print(f"[ERROR] Network error on page {page}: {exc}")
+            print(f"[ERROR] Network error on page {current_page}: {exc}")
             break
 
     return all_photos
