@@ -30,6 +30,13 @@ jobs:
           OLM_PASSWORD: ${{ secrets.OLM_PASSWORD }}
         run: python tests/test_auth.py
 
+      # TEMPORARY DIAGNOSTIC STEP
+      - name: Run API Endpoint Diagnostics
+        env:
+          OLM_EMAIL: ${{ secrets.OLM_EMAIL }}
+          OLM_PASSWORD: ${{ secrets.OLM_PASSWORD }}
+        run: python scripts/debug_api.py
+
       # --- MAIN PIPELINE STEP ---
       - name: Execute ETL Extraction Script
         env:
