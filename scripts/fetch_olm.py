@@ -7,99 +7,60 @@ import requests
 LOGIN_URL = "https://openlittermap.com/api/auth/token"
 PHOTOS_URL = "https://openlittermap.com/api/v3/user/photos"
 
-# Fail-fast endpoint assertion guard
 assert "v3" in PHOTOS_URL, "PHOTOS_URL must use the v3 endpoint — v1 was removed by OpenLitterMap"
 
 
-def classify_tag_group(tag):
-    category = str(tag.get("category") or "").lower()
-    parent_category = str(tag.get("parent_category") or "").lower()
-    item = str(tag.get("item", "")).lower()
-    tag_type = tag.get("type")
-
-    if tag_type == "custom_tag" and any(kw in item for kw in ("thc", "cannabis", "weed")):
-        return "substances"
-    if category in ("smoking", "alcohol"):
-        return "substances"
-    if parent_category in ("smoking", "alcohol"):
-        return "substances"
-    if category == "pets" and item in ("dogshit", "dogshit_in_bag"):
-        return "pet_waste"
+def classify_tag_group(tag):  
+    category = tag.get("category")  
+    parent_category = tag.get("parent_category")  
+    item = str(tag.get("item", "")).lower()  
+    tag_type = tag.get("type")  
+ 
+    if tag_type == "custom_tag" and any(kw in item for kw in ("thc", "cannabis", "weed")):  
+        return "substances"  
+    if category in ("smoking", "alcohol"):  
+        return "substances"  
+    if parent_category in ("smoking", "alcohol"):  
+        return "substances"  
+    if category == "pets" and item in ("dogshit", "dogshit_in_bag"):  
+        return "pet_waste"  
     return "litter"
 
 
-def _value_key(value, default="unclassified"):
-    """Return a useful key from either an OLM object or a scalar value."""
-    if isinstance(value, dict):
-        return value.get("key") or value.get("name") or value.get("slug") or default
-    return value if value not in (None, "") else default
-
-
 def resolve_new_tags_format(tag_entry):
-    """Normalize one new_tags entry without dropping entries lacking a CLO id.
-
-    Some API responses contain a complete category/object pair but omit
-    category_litter_object_id.  The old implementation treated those entries
-    as empty, which made valid object points disappear during flattening.
-    """
-    if not isinstance(tag_entry, dict):
-        return []
-
     formatted = []
+    clo_id = tag_entry.get("category_litter_object_id")
     category = tag_entry.get("category") or {}
-    obj = tag_entry.get("object") or tag_entry.get("item") or {}
-    category_key = _value_key(category)
-    object_key = _value_key(obj)
+    obj = tag_entry.get("object") or {}
 
-    has_standard_tag = (
-        tag_entry.get("category_litter_object_id") is not None
-        or tag_entry.get("category_id") is not None
-        or tag_entry.get("object_id") is not None
-        or tag_entry.get("category") is not None
-        or tag_entry.get("object") is not None
-        or tag_entry.get("item") is not None
-    )
-    if has_standard_tag:
+    if clo_id is not None:
         formatted.append({
             "type": "standard",
-            "category": category_key,
-            "item": object_key,
+            "category": category.get("key", "unclassified"),
+            "item": obj.get("key", "unclassified"),
             "quantity": tag_entry.get("quantity", 1),
         })
 
     for extra in tag_entry.get("extra_tags") or []:
-        if not isinstance(extra, dict):
-            continue
-        tag_info = extra.get("tag") or extra.get("object") or extra.get("item")
+        tag_info = extra.get("tag") or {}
         formatted.append({
             "type": extra.get("type", "extra"),
-            "category": extra.get("category") or extra.get("type", "extra"),
-            "item": _value_key(tag_info),
+            "category": extra.get("type", "extra"),
+            "item": tag_info.get("key", "unclassified"),
             "quantity": extra.get("quantity", tag_entry.get("quantity", 1)),
-            "parent_category": category_key,
-            "parent_item": object_key,
+            "parent_category": category.get("key"),
+            "parent_item": obj.get("key"),
         })
     return formatted
 
 
 def resolve_summary_format(tag_entry, keys):
-    """Normalize summary.tags[] while retaining entries with partial IDs."""
-    if not isinstance(tag_entry, dict):
-        return []
-
     formatted = []
-    category_id = tag_entry.get("category_id")
-    object_id = tag_entry.get("object_id")
-    category_name = keys.get("categories", {}).get(str(category_id))
-    object_name = keys.get("objects", {}).get(str(object_id))
+    clo_id = tag_entry.get("clo_id")
+    category_name = keys.get("categories", {}).get(str(tag_entry.get("category_id")))
+    object_name = keys.get("objects", {}).get(str(tag_entry.get("object_id")))
 
-    # clo_id is not consistently present; category/object IDs are sufficient
-    # evidence that this is a real standard object.
-    if (
-        tag_entry.get("clo_id") is not None
-        or category_id is not None
-        or object_id is not None
-    ):
+    if clo_id is not None:
         formatted.append({
             "type": "standard",
             "category": category_name or "unclassified",
@@ -129,9 +90,7 @@ def resolve_summary_format(tag_entry, keys):
             "parent_item": object_name,
         })
 
-    custom_tags = tag_entry.get("custom_tags") or []
-    custom_ids = list(custom_tags.keys()) if isinstance(custom_tags, dict) else custom_tags
-    for custom_id in custom_ids:
+    for custom_id in tag_entry.get("custom_tags") or []:
         formatted.append({
             "type": "custom_tag",
             "category": "custom_tag",
@@ -148,8 +107,8 @@ def build_photo_properties(photo):
     formatted_tags = []
     new_tags = photo.get("new_tags")
 
-    if new_tags is not None:
-        for entry in new_tags or []:
+    if new_tags:
+        for entry in new_tags:
             formatted_tags.extend(resolve_new_tags_format(entry))
     else:
         summary = photo.get("summary") or {}
@@ -171,74 +130,72 @@ def build_photo_properties(photo):
     }
 
 
-def get_auth_token(email, password, retries=1, delay=3):
-    """
-    Authenticates against OLM API and retrieves a fresh Bearer token dynamically.
-    """
+def get_auth_token(email, password, retries=2, delay=3):
     payload = {"email": email, "password": password}
     headers = {"Accept": "application/json"}
-    attempt = 0
-
-    while attempt <= retries:
+    
+    for attempt in range(retries + 1):
         try:
             print(f"[INFO] Authenticating against OLM ({LOGIN_URL})...")
             response = requests.post(LOGIN_URL, json=payload, headers=headers, timeout=30)
-            raw_text = response.text.strip() if response.text else ""
-            print(f"[DEBUG Auth] HTTP Status: {response.status_code}")
-
-            if response.status_code == 200 and raw_text:
-                try:
-                    data = response.json()
-                    token = data.get("token") or data.get("access_token")
-                    if token:
-                        print("[SUCCESS] Successfully obtained OLM session token.")
-                        return token
-                    print(f"[ERROR] Auth response missing token key. Payload keys: {list(data.keys())}")
-                except json.JSONDecodeError as decode_err:
-                    print(f"[ERROR] Failed to parse auth JSON response: {decode_err}")
-            print(f"[WARN] Auth attempt failed. Raw response preview: {raw_text[:300]!r}")
+            if response.status_code == 200:
+                data = response.json()
+                token = data.get("token") or data.get("access_token")
+                if token:
+                    print("[SUCCESS] Obtained session token.")
+                    return token
         except requests.RequestException as exc:
-            print(f"[WARN] Auth connection error on attempt {attempt + 1}: {exc}")
+            print(f"[WARN] Auth attempt {attempt + 1} failed: {exc}")
+        time.sleep(delay)
 
-        attempt += 1
-        if attempt <= retries:
-            print(f"[INFO] Retrying authentication in {delay}s...")
-            time.sleep(delay)
-
-    print("[CRITICAL ERROR] Failed to authenticate with provided OLM_EMAIL and OLM_PASSWORD.")
+    print("[CRITICAL ERROR] Failed to authenticate with OLM.")
     sys.exit(1)
 
 
-def fetch_photos(token, retries=1, delay=3):
-    """Fetches user photos using the Bearer token with explicit content negotiation."""
-    headers = {"Authorization": f"Bearer {token}", "Accept": "application/json"}
-    attempt = 0
+def fetch_all_photos(token):
+    """Iterates through all paginated API responses until all user photos are retrieved."""
+    headers = {
+        "Authorization": f"Bearer {token}",
+        "Accept": "application/json"
+    }
+    
+    all_photos = []
+    current_url = PHOTOS_URL
+    page = 1
 
-    while attempt <= retries:
+    while current_url:
+        print(f"[INFO] Fetching page {page} from {current_url}...")
         try:
-            print(f"[INFO] Fetching user photos from {PHOTOS_URL} (Attempt {attempt + 1}/{retries + 1})...")
-            response = requests.get(PHOTOS_URL, headers=headers, timeout=30)
-            raw_text = response.text.strip() if response.text else ""
-            print(f"[DEBUG Photos] HTTP Status: {response.status_code}")
-            print(f"[DEBUG Photos] Content-Type: {response.headers.get('Content-Type')}")
-
-            if response.status_code == 200 and raw_text:
-                try:
-                    return response.json()
-                except json.JSONDecodeError as decode_err:
-                    print(f"[ERROR] Response body is not valid JSON despite HTTP 200: {decode_err}")
+            response = requests.get(current_url, headers=headers, timeout=30)
+            if response.status_code != 200:
+                print(f"[ERROR] HTTP {response.status_code} received on page {page}.")
+                break
+                
+            data = response.json()
+            
+            # Extract list depending on whether envelope is paginated dict or direct list
+            if isinstance(data, dict):
+                photos_page = data.get("photos") or data.get("data") or []
+                current_url = data.get("next_page_url") or data.get("links", {}).get("next")
+            elif isinstance(data, list):
+                photos_page = data
+                current_url = None
             else:
-                print(f"[WARN] Non-200 HTTP response received: {response.status_code}")
+                photos_page = []
+                current_url = None
+
+            all_photos.extend(photos_page)
+            print(f"[INFO] Page {page}: fetched {len(photos_page)} photos (Total cumulative: {len(all_photos)}).")
+            
+            page += 1
+            if current_url:
+                time.sleep(0.5) # Respectful API pacing
+                
         except requests.RequestException as exc:
-            print(f"[WARN] Network connection failed on attempt {attempt + 1}: {exc}")
+            print(f"[ERROR] Network error on page {page}: {exc}")
+            break
 
-        attempt += 1
-        if attempt <= retries:
-            print(f"[INFO] Retrying data fetch in {delay}s...")
-            time.sleep(delay)
-
-    print("[CRITICAL ERROR] Failed to retrieve valid JSON photo data from OLM API.")
-    sys.exit(1)
+    return all_photos
 
 
 def fetch_and_build_geojson():
@@ -246,16 +203,16 @@ def fetch_and_build_geojson():
     password = os.environ.get("OLM_PASSWORD", "").strip()
 
     if not email or not password:
-        print("[CRITICAL ERROR] OLM_EMAIL or OLM_PASSWORD environment variables are missing.")
+        print("[CRITICAL ERROR] Missing OLM_EMAIL or OLM_PASSWORD environment variables.")
         sys.exit(1)
 
     token = get_auth_token(email, password)
-    data = fetch_photos(token)
+    raw_photos = fetch_all_photos(token)
+    
+    print(f"\n[DIAGNOSTIC] Total raw photo records fetched from API: {len(raw_photos)}")
 
     features = []
-    photos = data.get("photos", []) if isinstance(data, dict) else data
-
-    for photo in photos:
+    for photo in raw_photos:
         coords = photo.get("geometry", {}).get("coordinates") or [photo.get("lon"), photo.get("lat")]
         if not coords or coords[0] is None or coords[1] is None:
             continue
@@ -263,18 +220,28 @@ def fetch_and_build_geojson():
         properties = build_photo_properties(photo)
         features.append({
             "type": "Feature",
-            "geometry": {"type": "Point", "coordinates": [float(coords[0]), float(coords[1])]},
+            "geometry": {
+                "type": "Point",
+                "coordinates": [float(coords[0]), float(coords[1])]
+            },
             "properties": properties
         })
 
-    geojson = {"type": "FeatureCollection", "features": features}
+    geojson = {
+        "type": "FeatureCollection",
+        "features": features
+    }
 
-    os.makedirs("data", exist_ok=True)
-    out_path = "data/litter.geojson"
-    with open(out_path, "w", encoding="utf-8") as f:
-        json.dump(geojson, f, indent=2)
+    print(f"[DIAGNOSTIC] Total valid georeferenced features compiled: {len(features)}")
 
-    print(f"[SUCCESS] Successfully generated {out_path} with {len(features)} features.")
+    # Canonical Output Paths
+    target_paths = ["data/litter.geojson", "public/data/litter.geojson"]
+    
+    for path in target_paths:
+        os.makedirs(os.path.dirname(path), exist_ok=True)
+        with open(path, "w", encoding="utf-8") as f:
+            json.dump(geojson, f, indent=2)
+        print(f"[SUCCESS] Exported canonical dataset -> {path}")
 
 
 if __name__ == "__main__":
