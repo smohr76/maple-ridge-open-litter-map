@@ -160,54 +160,45 @@ def fetch_all_photos(token):
     
     all_photos = []
     current_page = 1
-    last_page = 1
+    max_safety_pages = 200  # Hard circuit breaker against infinite loops
 
-    while current_page <= last_page:
+    while current_page <= max_safety_pages:
         params = {"page": current_page}
-        print(f"[INFO] Requesting page {current_page} of {last_page} from {PHOTOS_URL}...")
+        print(f"[INFO] Fetching page {current_page} from {PHOTOS_URL}...")
         
         try:
             response = requests.get(PHOTOS_URL, headers=headers, params=params, timeout=30)
             if response.status_code != 200:
-                print(f"[ERROR] HTTP {response.status_code} received on page {current_page}.")
+                print(f"[ERROR] HTTP {response.status_code} received on page {current_page}. Terminating fetch.")
                 break
                 
             data = response.json()
             
-            # Extract photo records payload
+            # Extract photo records list regardless of response wrapper
             if isinstance(data, dict):
                 photos_page = data.get("photos") or data.get("data") or []
-                
-                # Extract pagination boundary metadata across potential schemas
-                meta = data.get("meta") or {}
-                last_page = (
-                    data.get("last_page") 
-                    or meta.get("last_page") 
-                    or data.get("last_page_number") 
-                    or last_page
-                )
-                
-                # Fallback: check next_page_url if numeric bounds are missing
-                next_url = data.get("next_page_url") or data.get("links", {}).get("next")
-                if next_url and last_page == 1:
-                    last_page = current_page + 1
-
             elif isinstance(data, list):
                 photos_page = data
-                last_page = current_page
             else:
                 photos_page = []
 
+            # Page-Until-Empty Termination Check
+            if not photos_page:
+                print(f"[INFO] Page {current_page} returned 0 records. Reached end of dataset.")
+                break
+
             all_photos.extend(photos_page)
-            print(f"[INFO] Page {current_page}/{last_page}: fetched {len(photos_page)} photos (Cumulative total: {len(all_photos)}).")
+            print(f"[INFO] Page {current_page}: fetched {len(photos_page)} photos (Cumulative total: {len(all_photos)}).")
             
             current_page += 1
-            if current_page <= last_page:
-                time.sleep(0.5)
+            time.sleep(0.5)
                 
         except requests.RequestException as exc:
-            print(f"[ERROR] Network error on page {current_page}: {exc}")
+            print(f"[ERROR] Network exception on page {current_page}: {exc}")
             break
+
+    if current_page > max_safety_pages:
+        print(f"[WARN] Circuit breaker triggered at max safety limit ({max_safety_pages} pages).")
 
     return all_photos
 
