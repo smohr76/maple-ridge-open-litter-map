@@ -19,8 +19,8 @@ Our localized schema translates raw field observations into four core waste stre
     ▼                   ▼                                    ▼                   ▼
 
 ┌──────────────────┐┌──────────────────┐                ┌──────────────────┐┌──────────────────┐
-│ Single-Use Items ││ Paper/Compostables│                │ Hazardous Waste  ││ Other Recyclables│
-│   (Bylaw Priority)││  (Recyclable/Fiber)│                │  (Bio/Chemical)  ││ (Metal/Glass/Bulk)│
+│ Single-Use Items ││ Paper/Comp       │                │ Hazardous Waste  ││ Other Recyclables│
+│   Bylaw Priority ││ Recyclable/Fiber │                │  (Bio/Chemical)  ││ (Metal/Glass/Blk)│
 └──────────────────┘└──────────────────┘                └──────────────────┘└──────────────────┘
 
 
