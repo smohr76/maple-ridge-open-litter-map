@@ -92,6 +92,43 @@ def fetch_and_build_geojson():
         if lat is None or lon is None:
             continue
 
+        # Extract nested OLM v3 tags
+        raw_tags = photo.get("new_tags") or []
+        formatted_tags = []
+
+        for t in raw_tags:
+            if not isinstance(t, dict):
+                continue
+
+            category_dict = t.get("category") or {}
+            object_dict = t.get("object") or {}
+
+            # Primary tag entry (handles standard items and loose tags)
+            formatted_tags.append({
+                "category": category_dict.get("key", "unclassified"),
+                "item": object_dict.get("key", "unclassified"),
+                "quantity": t.get("quantity", 1),
+                "picked_up": t.get("picked_up", False),
+                "type": "standard"
+            })
+
+            # Process extra_tags array (brands, materials, custom tags)
+            extra_tags = t.get("extra_tags") or []
+            for extra in extra_tags:
+                if not isinstance(extra, dict):
+                    continue
+                
+                tag_info = extra.get("tag") or {}
+                tag_type = extra.get("type", "extra")
+                
+                formatted_tags.append({
+                    "category": tag_type,
+                    "item": tag_info.get("key", "unclassified"),
+                    "quantity": extra.get("quantity", t.get("quantity", 1)),
+                    "picked_up": t.get("picked_up", False),
+                    "type": tag_type
+                })
+
         try:
             feature = {
                 "type": "Feature",
@@ -102,21 +139,14 @@ def fetch_and_build_geojson():
                 "properties": {
                     "id": photo.get("id"),
                     "datetime": photo.get("datetime"),
-                    "filename": photo.get("filename")
+                    "filename": photo.get("filename"),
+                    "summary": photo.get("summary", []),
+                    "tags": formatted_tags
                 }
             }
             features.append(feature)
         except (ValueError, TypeError) as err:
             print(f"WARNING: Skipping invalid coordinate pair ({lat}, {lon}): {err}")
-
-    if len(features) == 0:
-        print("CRITICAL ERROR: No valid spatial features could be constructed from photo records.")
-        sys.exit(1)
-
-    geojson_doc = {
-        "type": "FeatureCollection",
-        "features": features
-    }
 
     # Step 5: Write Payload to Disk
     os.makedirs(os.path.dirname(OUTPUT_PATH), exist_ok=True)
