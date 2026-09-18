@@ -16,7 +16,7 @@ def classify_tag_group(tag):
     parent_category = tag.get("parent_category")  
     item = str(tag.get("item", "")).lower()  
     tag_type = tag.get("type")  
- 
+  
     if tag_type == "custom_tag" and any(kw in item for kw in ("thc", "cannabis", "weed")):  
         return "substances"  
     if category in ("smoking", "alcohol"):  
@@ -127,6 +127,9 @@ def build_photo_properties(photo):
         "filename": photo.get("filename"),
         "tags": formatted_tags,
         "groups": groups,
+        "has_litter": "litter" in groups,
+        "has_pet_waste": "pet_waste" in groups,
+        "has_substances": "substances" in groups
     }
 
 
