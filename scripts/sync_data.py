@@ -131,6 +131,24 @@ def resolve_summary_format(tag_entry, keys):
     return formatted
 
 
+def infer_color_group(formatted_tags, groups):
+    if "substances" in groups:
+        return "substances"
+    if "pet_waste" in groups:
+        return "pet_waste"
+
+    category_names = [str(tag.get("category") or "").lower() for tag in formatted_tags]
+    for category in category_names:
+        if category in {"smoking", "alcohol", "custom_tag", "material", "brand"}:
+            return "substances" if category in {"smoking", "alcohol", "custom_tag"} else category
+        if category in {"pets", "pet_waste"}:
+            return "pet_waste"
+        if category in {"single_use", "plastic", "paper", "metal", "glass", "recyclable", "other_recyclables"}:
+            return category
+
+    return "litter"
+
+
 def build_photo_properties(photo):
     formatted_tags = []
     new_tags = photo.get("new_tags")
@@ -145,6 +163,7 @@ def build_photo_properties(photo):
             formatted_tags.extend(resolve_summary_format(entry, keys))
 
     groups = list({classify_tag_group(tag) for tag in formatted_tags}) or ["litter"]
+    color_group = infer_color_group(formatted_tags, groups)
 
     return {
         "id": photo.get("id"),
@@ -152,6 +171,7 @@ def build_photo_properties(photo):
         "filename": photo.get("filename"),
         "tags": formatted_tags,
         "groups": groups,
+        "color_group": color_group,
         "has_litter": "litter" in groups,
         "has_pet_waste": "pet_waste" in groups,
         "has_substances": "substances" in groups,

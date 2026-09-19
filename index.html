@@ -5,7 +5,6 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>Maple Ridge OpenLitterMap GIS</title>
 
-  <!-- MapLibre Engine & Layout Dependencies -->
   <link href="https://unpkg.com/maplibre-gl@4.7.1/dist/maplibre-gl.css" rel="stylesheet" />
 
   <style>
@@ -15,6 +14,19 @@
       --panel-text: #1f2937;
       --muted-text: #4b5563;
       --focus-ring: #2563eb;
+      --button-bg: #2563eb;
+      --button-bg-hover: #1d4ed8;
+      --button-text: #ffffff;
+      --danger-bg: #fef2f2;
+      --danger-border: #fecaca;
+      --danger-text: #991b1b;
+      --green: #16a34a;
+      --red: #dc2626;
+      --orange: #d97706;
+      --amber: #f59e0b;
+      --blue: #3b82f6;
+      --purple: #8b5cf6;
+      --teal: #14b8a6;
     }
 
     body {
@@ -75,14 +87,53 @@
       cursor: pointer;
       width: 16px;
       height: 16px;
-      accent-color: #2563eb;
+      accent-color: var(--button-bg);
     }
 
     .filter-ctrl input:focus-visible,
-    .filter-ctrl label:focus-within {
+    .filter-ctrl label:focus-within,
+    .filter-ctrl button:focus-visible {
       outline: 2px solid var(--focus-ring);
       outline-offset: 2px;
       border-radius: 4px;
+    }
+
+    .filter-actions {
+      display: flex;
+      gap: 8px;
+      margin-top: 10px;
+      padding-top: 10px;
+      border-top: 1px solid #eee;
+    }
+
+    .filter-actions button {
+      flex: 1;
+      border: none;
+      border-radius: 6px;
+      padding: 8px 10px;
+      font-size: 12px;
+      font-weight: 600;
+      cursor: pointer;
+      transition: background-color 0.15s ease;
+    }
+
+    .primary-btn {
+      background: var(--button-bg);
+      color: var(--button-text);
+    }
+
+    .primary-btn:hover {
+      background: var(--button-bg-hover);
+    }
+
+    .secondary-btn {
+      background: #eff6ff;
+      color: var(--panel-text);
+      border: 1px solid #bfdbfe;
+    }
+
+    .secondary-btn:hover {
+      background: #dbeafe;
     }
 
     .status-counter {
@@ -91,6 +142,14 @@
       margin-top: 8px;
       border-top: 1px solid #eee;
       padding-top: 6px;
+    }
+
+    .status-counter.error {
+      color: var(--danger-text);
+      background: var(--danger-bg);
+      border: 1px solid var(--danger-border);
+      padding: 8px 10px;
+      border-radius: 6px;
     }
 
     .sr-only {
@@ -110,7 +169,6 @@
 
   <div id="map" tabindex="0" role="application" aria-label="Map of OpenLitterMap data for Maple Ridge"></div>
 
-  <!-- Interactive Category Control -->
   <div class="filter-ctrl" aria-label="Litter category filters">
     <fieldset>
       <legend>Categories</legend>
@@ -127,6 +185,12 @@
         Nicotine, THC &amp; Alcohol
       </label>
     </fieldset>
+
+    <div class="filter-actions">
+      <button type="button" class="secondary-btn" id="reset-filters">Reset filters</button>
+      <button type="button" class="primary-btn" id="retry-load">Retry load</button>
+    </div>
+
     <div id="feature-count" class="status-counter" aria-live="polite">Loading points...</div>
   </div>
 
@@ -135,6 +199,20 @@
   <script src="https://unpkg.com/maplibre-gl@4.7.1/dist/maplibre-gl.js"></script>
 
   <script>
+    const COLOR_MAP = {
+      substances: '#dc2626',
+      pet_waste: '#d97706',
+      smoking: '#f43f5e',
+      alcohol: '#fb7185',
+      pets: '#f59e0b',
+      single_use: '#3b82f6',
+      plastic: '#4f46e5',
+      paper: '#8b5cf6',
+      metal: '#14b8a6',
+      glass: '#2dd4bf',
+      litter: '#16a34a'
+    };
+
     const map = new maplibregl.Map({
       container: 'map',
       style: 'https://basemaps.cartocdn.com/gl/positron-gl-style/style.json',
@@ -145,26 +223,65 @@
     map.addControl(new maplibregl.NavigationControl(), 'top-right');
 
     const statusRegion = document.getElementById('map-status');
-
-    async function loadGeoJsonData() {
-      // Fetch path attempting primary path with fallback for build targets
-      let response = await fetch('./data/litter.geojson');
-      if (!response.ok) {
-        response = await fetch('./public/data/litter.geojson');
-      }
-      return await response.json();
-    }
+    const featureCountEl = document.getElementById('feature-count');
+    const categoryCheckboxes = Array.from(document.querySelectorAll('.category-filter'));
 
     function announceStatus(message) {
       statusRegion.textContent = message;
     }
 
-    map.on('load', async () => {
-      try {
-        const data = await loadGeoJsonData();
+    function setError(message) {
+      featureCountEl.classList.add('error');
+      featureCountEl.textContent = message;
+      announceStatus(message);
+    }
 
+    function clearError() {
+      featureCountEl.classList.remove('error');
+    }
+
+    function resetFilters() {
+      categoryCheckboxes.forEach((checkbox) => {
+        checkbox.checked = true;
+      });
+      applyFilterState();
+      announceStatus('Filters reset to default settings.');
+    }
+
+    function applyFilterState() {
+      const checkedFilters = categoryCheckboxes
+        .filter((checkbox) => checkbox.checked)
+        .map((checkbox) => checkbox.value);
+
+      if (checkedFilters.length === 0) {
+        map.setFilter('litter-points', ['literal', false]);
+        announceStatus('No categories selected; map is showing no points.');
+        return;
+      }
+
+      const filterConditions = checkedFilters.map((flag) => ['==', ['get', flag], true]);
+      map.setFilter('litter-points', ['any', ...filterConditions]);
+      announceStatus(`${checkedFilters.length} category filter(s) applied.`);
+    }
+
+    async function loadGeoJsonData() {
+      let response = await fetch('./data/litter.geojson');
+      if (!response.ok) {
+        response = await fetch('./public/data/litter.geojson');
+      }
+      if (!response.ok) {
+        throw new Error('Dataset could not be loaded');
+      }
+      return await response.json();
+    }
+
+    async function initializeMap() {
+      try {
+        clearError();
+        const data = await loadGeoJsonData();
         const featureCount = data.features ? data.features.length : 0;
-        document.getElementById('feature-count').innerText = `Total Points: ${featureCount}`;
+
+        featureCountEl.textContent = `Total Points: ${featureCount}`;
         announceStatus(`${featureCount} litter points loaded on the map.`);
 
         map.addSource('litter-data', {
@@ -172,62 +289,57 @@
           data: data
         });
 
-        // Circle Layer rendering driven by explicit boolean feature flags
-        map.addLayer({
-          id: 'litter-points',
-          type: 'circle',
-          source: 'litter-data',
-          paint: {
-            'circle-radius': 8,
-            'circle-color': [
-              'case',
-              ['boolean', ['get', 'has_substances'], false], '#dc2626',
-              ['boolean', ['get', 'has_pet_waste'], false], '#d97706',
-              '#16a34a'
-            ],
-            'circle-stroke-width': 2,
-            'circle-stroke-color': '#ffffff'
-          }
-        });
+        if (!map.getLayer('litter-points')) {
+          map.addLayer({
+            id: 'litter-points',
+            type: 'circle',
+            source: 'litter-data',
+            paint: {
+              'circle-radius': 8,
+              'circle-color': [
+                'match',
+                ['get', 'color_group'],
+                'substances', COLOR_MAP.substances,
+                'pet_waste', COLOR_MAP.pet_waste,
+                'smoking', COLOR_MAP.smoking,
+                'alcohol', COLOR_MAP.alcohol,
+                'pets', COLOR_MAP.pets,
+                'single_use', COLOR_MAP.single_use,
+                'plastic', COLOR_MAP.plastic,
+                'paper', COLOR_MAP.paper,
+                'metal', COLOR_MAP.metal,
+                'glass', COLOR_MAP.glass,
+                COLOR_MAP.litter
+              ],
+              'circle-stroke-width': 2,
+              'circle-stroke-color': '#ffffff'
+            }
+          });
+        }
 
-        // Auto-fit bounds to display all loaded features on view load
         if (featureCount > 0) {
           const bounds = new maplibregl.LngLatBounds();
-          data.features.forEach(feature => {
+          data.features.forEach((feature) => {
             bounds.extend(feature.geometry.coordinates);
           });
           map.fitBounds(bounds, { padding: 50, maxZoom: 15 });
         }
 
-        // Checkbox filtering using boolean property evaluation
-        function updateMapFilter() {
-          const checkedFilters = Array.from(document.querySelectorAll('.category-filter:checked'))
-            .map(cb => cb.value);
-
-          if (checkedFilters.length === 0) {
-            map.setFilter('litter-points', ['literal', false]);
-            announceStatus('No categories selected; map is showing no points.');
-            return;
-          }
-
-          const filterConditions = checkedFilters.map(flag => [
-            '==', ['get', flag], true
-          ]);
-
-          map.setFilter('litter-points', ['any', ...filterConditions]);
-          announceStatus(`${checkedFilters.length} category filter(s) applied.`);
-        }
-
-        document.querySelectorAll('.category-filter').forEach(checkbox => {
-          checkbox.addEventListener('change', updateMapFilter);
+        applyFilterState();
+        categoryCheckboxes.forEach((checkbox) => {
+          checkbox.addEventListener('change', applyFilterState);
         });
 
       } catch (err) {
         console.error('Failed to load GeoJSON dataset:', err);
-        document.getElementById('feature-count').innerText = 'Error loading dataset';
-        announceStatus('Error loading dataset.');
+        setError('Unable to load dataset. Please try again.');
       }
-    });
+    }
+
+    document.getElementById('reset-filters').addEventListener('click', resetFilters);
+    document.getElementById('retry-load').addEventListener('click', initializeMap);
+
+    map.on('load', initializeMap);
   </script>
 </body>
 </html>
