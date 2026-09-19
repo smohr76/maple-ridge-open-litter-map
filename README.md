@@ -1,6 +1,44 @@
-# Maple Ridge OpenLitterMap GIS Pipeline - Update September 17, 2026
+# Maple Ridge OpenLitterMap GIS Pipeline - Update September 19, 2026
 
 This repository hosts an automated, zero-cost geospatial ETL pipeline and interactive web visualization for personal OpenLitterMap (OLM) data contributions in Maple Ridge, British Columbia.
+
+---
+
+## CI and Test Workflow
+
+This project includes a lightweight GitHub Actions test gate to help protect the data transformation layer.
+
+### Automated test workflow
+
+The repository runs a Python test workflow on every push and pull request via:
+
+- `.github/workflows/tests.yml`
+
+What it does:
+
+- checks out the repository
+- sets up Python 3.11
+- installs `pytest` and `requests`
+- runs `pytest -q`
+
+Current validation status:
+
+- the workflow is expected to pass for core OLM normalization and validation logic
+- test coverage currently targets the ingestion helper functions, tag normalization, GeoJSON validation, and success-marker behavior
+
+### Hardening rules in effect
+
+The current hardening branch is intentionally enforcing a few operational safeguards:
+
+- validate GeoJSON before writing or publishing it
+- reject empty or malformed FeatureCollections
+- ensure coordinates are numeric and within valid latitude/longitude bounds
+- write GeoJSON atomically to avoid partially written files during interrupted runs
+- keep a backup of the previous working dataset when an update is attempted
+- retry transient HTTP requests with exponential backoff for OLM auth and fetch calls
+- write a `.last_success.txt` marker after successful pipeline execution for traceability
+
+These safeguards are designed to keep the GitHub Pages map and the ingestion pipeline resilient without introducing paid infrastructure or external services.
 
 ---
 
@@ -18,46 +56,31 @@ The core architectural constraints required maintaining a **$0.00/month infrastr
 
 * **API Paradigm Shift**: Migrated from legacy endpoints to the OpenLitterMap `v3` endpoint (`/api/v3/user/photos`) using bearer token authentication.
 
-
 * **Pagination Remediation**: Standardized pagination on a **Sentinel-Based (Page-Until-Empty)** traversal strategy (`?page=1`, `?page=2`, `...`). This decoupled ingestion from volatile server-side pagination metadata keys (`last_page`, `meta.last_page`, `next_page_url`), successfully scaling dataset extraction from an initial 8-record stub to the full 1,600+ georeferenced feature collection.
 
-
 * **Defensive Error Handling**: Implemented exponential backoff retries, safety page circuit breakers, and network exception handling to prevent job crashes during automated execution.
-
-
 
 #### 2. Schema Normalization & Classification
 
 * **Tag Resolution**: Built mapping functions (`resolve_new_tags_format` and `resolve_summary_format`) to handle structural variations between legacy tag summaries and new OLM tag hierarchies.
 
-
 * **Flattened Feature Flags**: Computed top-level boolean properties (`has_litter`, `has_pet_waste`, `has_substances`) within each GeoJSON feature to support high-performance client-side spatial queries.
-
-
 
 #### 3. Continuous Delivery & Dual-Path Asset Staging (`.github/workflows/sync_data.yml`)
 
 * **Automation**: Configured a scheduled GitHub Actions workflow executing every 12 hours (`0 */12 * * *`) on `ubuntu-latest` runners.
 
-
 * **Dual Target Writing**: Pipeline exports compiled GeoJSON payloads to both `data/litter.geojson` and `public/data/litter.geojson` simultaneously, resolving build-target path discrepancies across static hosting environments.
 
-
 * **No-Op Commit Filtering**: Evaluates staged `git diff` state prior to committing, preventing empty automated commits when source data remains unchanged.
-
-
 
 #### 4. High-Performance Client Rendering (`index.html`)
 
 * **Engine**: Built with MapLibre GL JS utilizing CARTO Positron vector basemaps.
 
-
 * **Data Ingestion**: Features a fallback `fetch()` loader checking `./data/litter.geojson` and `./public/data/litter.geojson`.
 
-
 * **Interactive UI**: Supports real-time boolean attribute filtering and dynamic spatial bounding (`LngLatBounds.fitBounds`).
-
-
 
 ---
 
@@ -65,18 +88,10 @@ The core architectural constraints required maintaining a **$0.00/month infrastr
 
 | Component | Technology | Cost / Overhead |
 | --- | --- | --- |
-| **Compute / ETL** | GitHub Actions (`ubuntu-latest`) | **$0.00** (~180 free runner mins/month out of 2,000)
-
- |
-| **Static Hosting** | GitHub Pages | **$0.00** (Free static distribution)
-
- |
-| **Map Rendering** | MapLibre GL JS + CARTO Basemaps | **$0.00** (Open-source GL library & free vector tile tiers)
-
- |
-| **Data Storage** | Native Repository Git LFS / File Tracking | **$0.00** (Flat GeoJSON text artifacts)
-
- |
+| **Compute / ETL** | GitHub Actions (`ubuntu-latest`) | **$0.00** (~180 free runner mins/month out of 2,000) |
+| **Static Hosting** | GitHub Pages | **$0.00** (Free static distribution) |
+| **Map Rendering** | MapLibre GL JS + CARTO Basemaps | **$0.00** (Open-source GL library & free vector tile tiers) |
+| **Data Storage** | Native Repository Git LFS / File Tracking | **$0.00** (Flat GeoJSON text artifacts) |
 
 ---
 
@@ -95,19 +110,15 @@ With the core ETL pipeline and baseline visualization fully operational, Stage 2
 │  Spatial Heatmaps &    │ ◄─── │ Advanced Client-Side UI  │ ◄─── │ MapLibre GL Vector Engine│
 │  Time-Series Analytics │      │ (Filtering & Popups)     │      │ (Flat Boolean Filters)   │
 └────────────────────────┘      └──────────────────────────┘      └──────────────────────────┘
-
 ```
 
 ### Planned Technical Objectives
 
 * **High-Density Clustering & Heatmap Rendering**: Implement `supercluster` integration or MapLibre `heatmap` layer types to gracefully handle expanding point density in high-volume collection routes without UI frame drops.
 
-
 * **Temporal & Time-Series Analytics**: Expose time-based filtering controls (e.g., date-range sliders) driven by the extracted ISO `datetime` properties to visualize litter accumulation patterns over time.
 
-
 * **Rich Spatial Popups & Media Links**: Enhance interactive map nodes with contextual modal popups displaying detailed item tags, brand categorization, and high-resolution photo asset previews sourced directly from OLM storage.
-
 
 --------------------------------------------------------------------------------------
 # Next Steps: Production-Quality Hardening
@@ -130,5 +141,21 @@ Planned improvements include:
 
 These improvements will preserve the current low-cost architecture while making the ETL pipeline and web client more resilient, testable, secure, and maintainable.
 
-
 * **Automated Data Validation & Metric Badging**: Add schema validation tests (e.g., GeoJSON validation via `jsonschema` or `turf`) into the CI pipeline, alongside dynamic README badges displaying live dataset statistics (e.g., total point counts, last sync date).
+
+---
+
+## Update Log
+
+### September 19, 2026
+
+- Added a GitHub Actions Python test workflow.
+- Added unit tests for tag normalization and validation logic.
+- Hardened the ingestion script with GeoJSON validation, atomic writes, retry/backoff logic, and a last-success marker.
+- Kept the workflow compatible with the project’s zero-cost static hosting model.
+
+### September 17, 2026
+
+- Initial Stage 1 ETL and GIS pipeline implementation completed.
+- OLM v3 ingestion, GeoJSON export, and client-side map rendering were established.
+
