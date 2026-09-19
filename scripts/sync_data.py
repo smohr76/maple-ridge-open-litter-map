@@ -192,6 +192,37 @@ def parse_coordinate(value, coord_type, photo_id):
         ) from exc
 
 
+def write_last_success_marker(marker_path):
+    """Write the current UTC timestamp to a success marker file."""
+    target_path = str(marker_path)
+    directory = os.path.dirname(target_path)
+    if directory:
+        os.makedirs(directory, exist_ok=True)
+
+    timestamp = time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime())
+    temp_path = None
+    try:
+        with tempfile.NamedTemporaryFile(
+            mode="w",
+            encoding="utf-8",
+            dir=directory or None,
+            prefix=".last_success.",
+            suffix=".tmp",
+            delete=False,
+        ) as temp_file:
+            temp_path = temp_file.name
+            temp_file.write(timestamp)
+            temp_file.write("\n")
+            temp_file.flush()
+            os.fsync(temp_file.fileno())
+
+        os.replace(temp_path, target_path)
+        return timestamp
+    finally:
+        if temp_path and os.path.exists(temp_path):
+            os.remove(temp_path)
+
+
 def get_auth_token(email, password, retries=2, delay=3):
     payload = {"email": email, "password": password}
     headers = {"Accept": "application/json"}
@@ -375,6 +406,7 @@ def fetch_and_build_geojson():
         sys.exit(1)
 
     publish_datasets_atomically(["data/litter.geojson", "public/data/litter.geojson"], geojson)
+    write_last_success_marker("data/last_success.txt")
 
 
 if __name__ == "__main__":
