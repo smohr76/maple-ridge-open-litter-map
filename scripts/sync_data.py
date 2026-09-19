@@ -11,6 +11,33 @@ PHOTOS_URL = "https://openlittermap.com/api/v3/user/photos"
 assert "v3" in PHOTOS_URL, "PHOTOS_URL must use the v3 endpoint — v1 was removed by OpenLitterMap"
 
 
+def request_with_retry(method, url, *, max_retries=3, base_delay=1.0, **kwargs):
+    """Retry transient HTTP failures with exponential backoff."""
+    last_error = None
+
+    for attempt in range(max_retries):
+        try:
+            response = requests.request(method, url, **kwargs)
+            if response.status_code in (429, 500, 502, 503, 504):
+                if attempt < max_retries - 1:
+                    delay = base_delay * (2 ** attempt)
+                    print(f"[WARN] transient HTTP {response.status_code} from {url}; retrying in {delay}s")
+                    time.sleep(delay)
+                    continue
+            return response
+        except requests.RequestException as exc:
+            last_error = exc
+            if attempt < max_retries - 1:
+                delay = base_delay * (2 ** attempt)
+                print(f"[WARN] request failure for {url}: {exc}; retrying in {delay}s")
+                time.sleep(delay)
+                continue
+
+    if last_error is not None:
+        raise last_error
+    raise RuntimeError(f"Request to {url} failed after {max_retries} attempts")
+
+
 def classify_tag_group(tag):
     category = tag.get("category")
     parent_category = tag.get("parent_category")
@@ -138,7 +165,15 @@ def get_auth_token(email, password, retries=2, delay=3):
     for attempt in range(retries + 1):
         try:
             print(f"[INFO] Authenticating against OLM ({LOGIN_URL})...")
-            response = requests.post(LOGIN_URL, json=payload, headers=headers, timeout=30)
+            response = request_with_retry(
+                "POST",
+                LOGIN_URL,
+                json=payload,
+                headers=headers,
+                timeout=30,
+                max_retries=3,
+                base_delay=delay,
+            )
             if response.status_code == 200:
                 data = response.json()
                 token = data.get("token") or data.get("access_token")
@@ -168,7 +203,15 @@ def fetch_all_photos(token):
         print(f"[INFO] Fetching page {current_page} from {PHOTOS_URL}...")
 
         try:
-            response = requests.get(PHOTOS_URL, headers=headers, params=params, timeout=30)
+            response = request_with_retry(
+                "GET",
+                PHOTOS_URL,
+                headers=headers,
+                params=params,
+                timeout=30,
+                max_retries=3,
+                base_delay=1.0,
+            )
             if response.status_code != 200:
                 print(f"[ERROR] HTTP {response.status_code} received on page {current_page}. Terminating fetch.")
                 break
@@ -272,6 +315,27 @@ def write_geojson_atomically(path, geojson):
     print(f"[SUCCESS] Wrote GeoJSON atomically -> {path}")
 
 
+def backup_existing_data(path):
+    if not os.path.exists(path):
+        return None
+    with open(path, "rb") as original:
+        return original.read()
+
+
+def restore_backup(path, backup_bytes):
+    if backup_bytes is None:
+        return
+    with open(path, "wb") as restored:
+        restored.write(backup_bytes)
+    print(f"[WARN] Restored previous valid dataset from backup: {path}")
+
+
+def write_last_success_marker(path=".last_success.txt"):
+    with open(path, "w", encoding="utf-8") as marker:
+        marker.write(time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime()))
+    print(f"[SUCCESS] Wrote last success marker -> {path}")
+
+
 def fetch_and_build_geojson():
     email = os.environ.get("OLM_EMAIL", "").strip()
     password = os.environ.get("OLM_PASSWORD", "").strip()
@@ -314,8 +378,18 @@ def fetch_and_build_geojson():
         print(f"[CRITICAL ERROR] GeoJSON validation failed: {exc}")
         sys.exit(1)
 
-    for path in ["data/litter.geojson", "public/data/litter.geojson"]:
-        write_geojson_atomically(path, geojson)
+    target_paths = ["data/litter.geojson", "public/data/litter.geojson"]
+
+    for path in target_paths:
+        backup = backup_existing_data(path)
+        try:
+            write_geojson_atomically(path, geojson)
+        except Exception as exc:
+            print(f"[CRITICAL ERROR] Failed to write GeoJSON to {path}: {exc}")
+            restore_backup(path, backup)
+            sys.exit(1)
+
+    write_last_success_marker()
 
 
 if __name__ == "__main__":

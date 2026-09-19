@@ -114,3 +114,29 @@ def test_build_photo_properties_sets_flattened_group_flags():
     assert properties["has_substances"] is True
     assert properties["has_litter"] is False
     assert properties["has_pet_waste"] is False
+
+
+def test_validate_geojson_rejects_invalid_feature():
+    invalid = {
+        "type": "FeatureCollection",
+        "features": [
+            {
+                "type": "Feature",
+                "geometry": {"type": "Point", "coordinates": [999, 99]},
+                "properties": {"id": 1},
+            }
+        ],
+    }
+
+    try:
+        sync_data.validate_geojson(invalid)
+        assert False, "Expected ValueError for invalid longitude"
+    except ValueError:
+        pass
+
+
+def test_write_last_success_marker_creates_timestamp_file(tmp_path):
+    marker = tmp_path / "last_success.txt"
+    sync_data.write_last_success_marker(str(marker))
+    assert marker.exists()
+    assert marker.read_text(encoding="utf-8").strip()
