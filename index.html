@@ -22,194 +22,50 @@
       --danger-text: #991b1b;
     }
 
-    body {
-      margin: 0;
-      padding: 0;
-      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
-      color: var(--panel-text);
-      background: #f3f4f6;
-    }
-
-    #map {
-      position: absolute;
-      top: 0;
-      bottom: 0;
-      width: 100%;
-    }
-
-    .filter-ctrl {
-      position: absolute;
-      top: 12px;
-      left: 12px;
-      z-index: 10;
-      background: var(--panel-bg);
-      padding: 14px 18px;
-      border-radius: 8px;
-      border: 1px solid var(--panel-border);
-      box-shadow: 0 2px 10px rgba(0,0,0,0.18);
-      min-width: 220px;
-      max-width: min(90vw, 300px);
-    }
-
-    .filter-ctrl fieldset {
-      margin: 0;
-      padding: 0;
-      border: 0;
-    }
-
-    .filter-ctrl legend,
-    .legend-title {
-      display: block;
-      margin-bottom: 10px;
-      font-size: 14px;
-      font-weight: 700;
-      color: var(--panel-text);
-    }
-
-    .filter-ctrl label {
-      display: flex;
-      align-items: center;
-      margin-bottom: 8px;
-      font-size: 13px;
-      color: var(--muted-text);
-      cursor: pointer;
-      line-height: 1.4;
-    }
-
-    .filter-ctrl input {
-      margin-right: 10px;
-      cursor: pointer;
-      width: 16px;
-      height: 16px;
-      accent-color: var(--button-bg);
-    }
-
-    .filter-ctrl input:focus-visible,
-    .filter-ctrl label:focus-within,
-    .filter-ctrl button:focus-visible {
-      outline: 2px solid var(--focus-ring);
-      outline-offset: 2px;
-      border-radius: 4px;
-    }
-
-    .filter-actions {
-      display: flex;
-      gap: 8px;
-      margin-top: 10px;
-      padding-top: 10px;
-      border-top: 1px solid #eee;
-    }
-
-    .filter-actions button {
-      flex: 1;
-      border: none;
-      border-radius: 6px;
-      padding: 8px 10px;
-      font-size: 12px;
-      font-weight: 600;
-      cursor: pointer;
-      transition: background-color 0.15s ease;
-    }
-
-    .primary-btn {
-      background: var(--button-bg);
-      color: var(--button-text);
-    }
-
-    .primary-btn:hover {
-      background: var(--button-bg-hover);
-    }
-
-    .secondary-btn {
-      background: #eff6ff;
-      color: var(--panel-text);
-      border: 1px solid #bfdbfe;
-    }
-
-    .secondary-btn:hover {
-      background: #dbeafe;
-    }
-
-    .legend {
-      margin-top: 12px;
-      padding-top: 10px;
-      border-top: 1px solid #eee;
-    }
-
-    .legend-list {
-      display: grid;
-      gap: 6px;
-      margin: 0;
-      padding: 0;
-      list-style: none;
-    }
-
-    .legend-item {
-      display: flex;
-      align-items: center;
-      gap: 8px;
-      font-size: 12px;
-      color: var(--muted-text);
-      line-height: 1.3;
-    }
-
-    .legend-swatch {
-      width: 12px;
-      height: 12px;
-      flex: 0 0 12px;
-      border: 1px solid rgba(0, 0, 0, 0.25);
-      border-radius: 50%;
-    }
-
-    .status-counter {
-      font-size: 11px;
-      color: var(--muted-text);
-      margin-top: 8px;
-      border-top: 1px solid #eee;
-      padding-top: 6px;
-    }
-
-    .status-counter.error {
-      color: var(--danger-text);
-      background: var(--danger-bg);
-      border: 1px solid var(--danger-border);
-      padding: 8px 10px;
-      border-radius: 6px;
-    }
-
-    .sr-only {
-      position: absolute;
-      width: 1px;
-      height: 1px;
-      padding: 0;
-      margin: -1px;
-      overflow: hidden;
-      clip: rect(0, 0, 0, 0);
-      white-space: nowrap;
-      border: 0;
-    }
+    body { margin: 0; font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; color: var(--panel-text); background: #f3f4f6; }
+    #map { position: absolute; inset: 0; }
+    .filter-ctrl { position: absolute; top: 12px; left: 12px; z-index: 10; background: var(--panel-bg); padding: 14px 18px; border-radius: 8px; border: 1px solid var(--panel-border); box-shadow: 0 2px 10px rgba(0,0,0,.18); min-width: 250px; max-width: min(90vw, 320px); }
+    .filter-ctrl fieldset { margin: 0; padding: 0; border: 0; }
+    .filter-ctrl legend, .legend-title { display: block; margin-bottom: 10px; font-size: 14px; font-weight: 700; }
+    .filter-ctrl label { display: flex; align-items: center; margin-bottom: 8px; font-size: 13px; color: var(--muted-text); cursor: pointer; line-height: 1.4; }
+    .filter-ctrl input { margin-right: 10px; cursor: pointer; width: 16px; height: 16px; accent-color: var(--button-bg); }
+    .filter-ctrl input:focus-visible, .filter-ctrl label:focus-within, .filter-ctrl button:focus-visible { outline: 2px solid var(--focus-ring); outline-offset: 2px; border-radius: 4px; }
+    .date-filter { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; margin-top: 12px; padding-top: 10px; border-top: 1px solid #eee; }
+    .date-filter label { display: block; margin: 0; font-size: 11px; }
+    .date-filter input { box-sizing: border-box; width: 100%; height: 30px; margin: 3px 0 0; padding: 3px; font: inherit; }
+    .filter-actions { display: flex; gap: 8px; margin-top: 10px; padding-top: 10px; border-top: 1px solid #eee; }
+    .filter-actions button { flex: 1; border: 0; border-radius: 6px; padding: 8px 10px; font-size: 12px; font-weight: 600; cursor: pointer; }
+    .primary-btn { background: var(--button-bg); color: var(--button-text); }
+    .primary-btn:hover { background: var(--button-bg-hover); }
+    .secondary-btn { background: #eff6ff; color: var(--panel-text); border: 1px solid #bfdbfe !important; }
+    .secondary-btn:hover { background: #dbeafe; }
+    .legend { margin-top: 12px; padding-top: 10px; border-top: 1px solid #eee; }
+    .legend-list { display: grid; gap: 6px; margin: 0; padding: 0; list-style: none; }
+    .legend-item { display: flex; align-items: center; gap: 8px; font-size: 12px; color: var(--muted-text); line-height: 1.3; }
+    .legend-swatch { width: 12px; height: 12px; flex: 0 0 12px; border: 1px solid rgba(0,0,0,.25); border-radius: 50%; }
+    .status-counter { font-size: 11px; color: var(--muted-text); margin-top: 8px; border-top: 1px solid #eee; padding-top: 6px; }
+    .status-counter.error { color: var(--danger-text); background: var(--danger-bg); border: 1px solid var(--danger-border); padding: 8px 10px; border-radius: 6px; }
+    .sr-only { position: absolute; width: 1px; height: 1px; padding: 0; margin: -1px; overflow: hidden; clip: rect(0,0,0,0); white-space: nowrap; border: 0; }
+    .maplibregl-popup-content { max-width: 300px; }
+    .popup-title { margin: 0 0 8px; font-size: 15px; }
+    .popup-meta { margin: 0; padding-left: 18px; font-size: 12px; line-height: 1.5; }
   </style>
 </head>
 <body>
-
   <div id="map" tabindex="0" role="application" aria-label="Map of OpenLitterMap data for Maple Ridge"></div>
 
   <div class="filter-ctrl" aria-label="Litter category filters and map legend">
     <fieldset>
       <legend>Categories</legend>
-      <label for="filter-litter">
-        <input id="filter-litter" type="checkbox" class="category-filter" value="has_litter" checked aria-label="Show litter points">
-        Litter
-      </label>
-      <label for="filter-pet-waste">
-        <input id="filter-pet-waste" type="checkbox" class="category-filter" value="has_pet_waste" checked aria-label="Show pet waste points">
-        Pet Waste
-      </label>
-      <label for="filter-substances">
-        <input id="filter-substances" type="checkbox" class="category-filter" value="has_substances" checked aria-label="Show nicotine, THC and alcohol points">
-        Nicotine, THC &amp; Alcohol
-      </label>
+      <label><input type="checkbox" class="category-filter" value="has_litter" checked> Litter</label>
+      <label><input type="checkbox" class="category-filter" value="has_pet_waste" checked> Pet Waste</label>
+      <label><input type="checkbox" class="category-filter" value="has_substances" checked> Nicotine, THC &amp; Alcohol</label>
     </fieldset>
+
+    <div class="date-filter" aria-label="Date range filter">
+      <label for="date-from">From<input id="date-from" type="date"></label>
+      <label for="date-to">To<input id="date-to" type="date"></label>
+    </div>
 
     <div class="legend" aria-labelledby="legend-heading">
       <div id="legend-heading" class="legend-title">Map colors</div>
@@ -228,156 +84,83 @@
       <button type="button" class="secondary-btn" id="reset-filters">Reset filters</button>
       <button type="button" class="primary-btn" id="retry-load">Retry load</button>
     </div>
-
     <div id="feature-count" class="status-counter" aria-live="polite">Loading points...</div>
   </div>
-
   <div id="map-status" class="sr-only" aria-live="polite"></div>
 
   <script src="https://unpkg.com/maplibre-gl@4.7.1/dist/maplibre-gl.js"></script>
-
   <script>
-    const COLOR_MAP = {
-      substances: '#dc2626',
-      pet_waste: '#d97706',
-      smoking: '#f43f5e',
-      alcohol: '#fb7185',
-      pets: '#f59e0b',
-      single_use: '#3b82f6',
-      plastic: '#4f46e5',
-      paper: '#8b5cf6',
-      metal: '#14b8a6',
-      glass: '#2dd4bf',
-      litter: '#16a34a'
-    };
-
-    const map = new maplibregl.Map({
-      container: 'map',
-      style: 'https://basemaps.cartocdn.com/gl/positron-gl-style/style.json',
-      center: [-122.601, 49.2193],
-      zoom: 12
-    });
-
+    const COLOR_MAP = { substances:'#dc2626', pet_waste:'#d97706', smoking:'#f43f5e', alcohol:'#fb7185', pets:'#f59e0b', single_use:'#3b82f6', plastic:'#4f46e5', paper:'#8b5cf6', metal:'#14b8a6', glass:'#2dd4bf', litter:'#16a34a' };
+    const map = new maplibregl.Map({ container:'map', style:'https://basemaps.cartocdn.com/gl/positron-gl-style/style.json', center:[-122.601,49.2193], zoom:12 });
     map.addControl(new maplibregl.NavigationControl(), 'top-right');
-
     const statusRegion = document.getElementById('map-status');
     const featureCountEl = document.getElementById('feature-count');
     const categoryCheckboxes = Array.from(document.querySelectorAll('.category-filter'));
+    const dateFrom = document.getElementById('date-from');
+    const dateTo = document.getElementById('date-to');
+    let dataset = null;
 
-    function announceStatus(message) {
-      statusRegion.textContent = message;
+    function announceStatus(message) { statusRegion.textContent = message; }
+    function setError(message) { featureCountEl.classList.add('error'); featureCountEl.textContent = message; announceStatus(message); }
+    function clearError() { featureCountEl.classList.remove('error'); }
+    function dateExpression() {
+      const conditions = [];
+      if (dateFrom.value) conditions.push(['>=', ['to-string', ['get', 'datetime']], dateFrom.value]);
+      if (dateTo.value) conditions.push(['<=', ['to-string', ['get', 'datetime']], `${dateTo.value}T23:59:59`]);
+      return conditions;
     }
-
-    function setError(message) {
-      featureCountEl.classList.add('error');
-      featureCountEl.textContent = message;
-      announceStatus(message);
-    }
-
-    function clearError() {
-      featureCountEl.classList.remove('error');
-    }
-
-    function resetFilters() {
-      categoryCheckboxes.forEach((checkbox) => {
-        checkbox.checked = true;
-      });
-      applyFilterState();
-      announceStatus('Filters reset to default settings.');
-    }
-
     function applyFilterState() {
-      const checkedFilters = categoryCheckboxes
-        .filter((checkbox) => checkbox.checked)
-        .map((checkbox) => checkbox.value);
-
-      if (checkedFilters.length === 0) {
-        map.setFilter('litter-points', ['literal', false]);
-        announceStatus('No categories selected; map is showing no points.');
-        return;
-      }
-
-      const filterConditions = checkedFilters.map((flag) => ['==', ['get', flag], true]);
-      map.setFilter('litter-points', ['any', ...filterConditions]);
-      announceStatus(`${checkedFilters.length} category filter(s) applied.`);
+      if (!map.getLayer('litter-points')) return;
+      const filters = categoryCheckboxes.filter(cb => cb.checked).map(cb => ['==', ['get', cb.value], true]);
+      const dates = dateExpression();
+      const expression = [];
+      if (filters.length) expression.push(['any', ...filters]);
+      if (dates.length) expression.push(['all', ...dates]);
+      map.setFilter('litter-points', expression.length ? (expression.length === 1 ? expression[0] : ['all', ...expression]) : ['literal', false]);
+      const selected = categoryCheckboxes.filter(cb => cb.checked).length;
+      announceStatus(`${selected} category filter(s) and date range applied.`);
     }
-
+    function resetFilters() {
+      categoryCheckboxes.forEach(cb => { cb.checked = true; });
+      dateFrom.value = ''; dateTo.value = ''; applyFilterState(); announceStatus('Filters reset to default settings.');
+    }
     async function loadGeoJsonData() {
       let response = await fetch('./data/litter.geojson');
-      if (!response.ok) {
-        response = await fetch('./public/data/litter.geojson');
-      }
-      if (!response.ok) {
-        throw new Error('Dataset could not be loaded');
-      }
-      return await response.json();
+      if (!response.ok) response = await fetch('./public/data/litter.geojson');
+      if (!response.ok) throw new Error('Dataset could not be loaded');
+      const data = await response.json();
+      if (data.type !== 'FeatureCollection' || !Array.isArray(data.features)) throw new Error('Dataset is not a valid GeoJSON FeatureCollection');
+      return data;
     }
-
+    function addMapLayers() {
+      if (!map.getSource('litter-data')) map.addSource('litter-data', { type:'geojson', data:dataset, cluster:true, clusterMaxZoom:14, clusterRadius:45 });
+      if (!map.getLayer('litter-heatmap')) map.addLayer({ id:'litter-heatmap', type:'heatmap', source:'litter-data', maxzoom:13, paint:{ 'heatmap-radius':['interpolate',['linear'],['zoom'],8,12,13,25], 'heatmap-opacity':['interpolate',['linear'],['zoom'],8,.72,13,.2], 'heatmap-intensity':['interpolate',['linear'],['zoom'],8,.7,13,1.5], 'heatmap-color':['interpolate',['linear'],['heatmap-density'],0,'rgba(33,102,172,0)',.2,'#5e4fa2',.4,'#3288bd',.6,'#66c2a5',.8,'#fee08b',1,'#d53e4f'] } });
+      if (!map.getLayer('litter-clusters')) map.addLayer({ id:'litter-clusters', type:'circle', source:'litter-data', filter:['has','point_count'], paint:{ 'circle-color':['step',['get','point_count'],'#93c5fd',25,'#3b82f6',100,'#1d4ed8'], 'circle-radius':['step',['get','point_count'],18,25,24,100,30], 'circle-stroke-color':'#fff', 'circle-stroke-width':2 } });
+      if (!map.getLayer('litter-cluster-count')) map.addLayer({ id:'litter-cluster-count', type:'symbol', source:'litter-data', filter:['has','point_count'], layout:{ 'text-field':['get','point_count_abbreviated'], 'text-size':12 }, paint:{ 'text-color':'#fff' } });
+      if (!map.getLayer('litter-points')) map.addLayer({ id:'litter-points', type:'circle', source:'litter-data', filter:['!',['has','point_count']], paint:{ 'circle-radius':8, 'circle-color':['match',['get','color_group'],'substances',COLOR_MAP.substances,'pet_waste',COLOR_MAP.pet_waste,'smoking',COLOR_MAP.smoking,'alcohol',COLOR_MAP.alcohol,'pets',COLOR_MAP.pets,'single_use',COLOR_MAP.single_use,'plastic',COLOR_MAP.plastic,'paper',COLOR_MAP.paper,'metal',COLOR_MAP.metal,'glass',COLOR_MAP.glass,COLOR_MAP.litter], 'circle-stroke-width':2, 'circle-stroke-color':'#fff' } });
+    }
+    function fitToData() {
+      if (!dataset.features.length) return;
+      const bounds = new maplibregl.LngLatBounds(); dataset.features.forEach(f => bounds.extend(f.geometry.coordinates));
+      map.fitBounds(bounds, { padding:50, maxZoom:15 });
+    }
     async function initializeMap() {
       try {
-        clearError();
-        const data = await loadGeoJsonData();
-        const featureCount = data.features ? data.features.length : 0;
-
-        featureCountEl.textContent = `Total Points: ${featureCount}`;
-        announceStatus(`${featureCount} litter points loaded on the map.`);
-
-        map.addSource('litter-data', {
-          type: 'geojson',
-          data: data
-        });
-
-        if (!map.getLayer('litter-points')) {
-          map.addLayer({
-            id: 'litter-points',
-            type: 'circle',
-            source: 'litter-data',
-            paint: {
-              'circle-radius': 8,
-              'circle-color': [
-                'match',
-                ['get', 'color_group'],
-                'substances', COLOR_MAP.substances,
-                'pet_waste', COLOR_MAP.pet_waste,
-                'smoking', COLOR_MAP.smoking,
-                'alcohol', COLOR_MAP.alcohol,
-                'pets', COLOR_MAP.pets,
-                'single_use', COLOR_MAP.single_use,
-                'plastic', COLOR_MAP.plastic,
-                'paper', COLOR_MAP.paper,
-                'metal', COLOR_MAP.metal,
-                'glass', COLOR_MAP.glass,
-                COLOR_MAP.litter
-              ],
-              'circle-stroke-width': 2,
-              'circle-stroke-color': '#ffffff'
-            }
-          });
-        }
-
-        if (featureCount > 0) {
-          const bounds = new maplibregl.LngLatBounds();
-          data.features.forEach((feature) => {
-            bounds.extend(feature.geometry.coordinates);
-          });
-          map.fitBounds(bounds, { padding: 50, maxZoom: 15 });
-        }
-
-        applyFilterState();
-        categoryCheckboxes.forEach((checkbox) => {
-          checkbox.addEventListener('change', applyFilterState);
-        });
-
-      } catch (err) {
-        console.error('Failed to load GeoJSON dataset:', err);
-        setError('Unable to load dataset. Please try again.');
-      }
+        clearError(); dataset = await loadGeoJsonData();
+        featureCountEl.textContent = `Total Points: ${dataset.features.length}`;
+        addMapLayers();
+        map.getSource('litter-data').setData(dataset);
+        fitToData(); applyFilterState(); announceStatus(`${dataset.features.length} litter points loaded; heatmap and clustering enabled.`);
+      } catch (err) { console.error('Failed to load GeoJSON dataset:', err); setError('Unable to load dataset. Please try again.'); }
     }
-
+    map.on('load', initializeMap);
+    map.on('click', 'litter-clusters', e => { const features = map.queryRenderedFeatures(e.point, { layers:['litter-clusters'] }); if (!features.length) return; map.getSource('litter-data').getClusterExpansionZoom(features[0].properties.cluster_id, (error, zoom) => { if (!error) map.easeTo({ center:features[0].geometry.coordinates, zoom }); }); });
+    map.on('click', 'litter-points', e => { const p = e.features[0].properties; const tags = Array.isArray(p.tags) ? p.tags : []; const tagText = tags.map(tag => `${tag.item || tag.category || 'unclassified'}${tag.quantity > 1 ? ` (×${tag.quantity})` : ''}`).join(', '); new maplibregl.Popup().setLngLat(e.lngLat).setHTML(`<h3 class="popup-title">Litter record</h3><ul class="popup-meta"><li>Date: ${p.datetime || 'Unknown'}</li><li>Category: ${p.color_group || 'Other litter'}</li><li>Tags: ${tagText || 'None recorded'}</li></ul>`).addTo(map); });
+    ['litter-clusters','litter-points'].forEach(layer => { map.on('mouseenter', layer, () => { map.getCanvas().style.cursor = 'pointer'; }); map.on('mouseleave', layer, () => { map.getCanvas().style.cursor = ''; }); });
+    categoryCheckboxes.forEach(cb => cb.addEventListener('change', applyFilterState));
+    [dateFrom, dateTo].forEach(input => input.addEventListener('change', applyFilterState));
     document.getElementById('reset-filters').addEventListener('click', resetFilters);
     document.getElementById('retry-load').addEventListener('click', initializeMap);
-
-    map.on('load', initializeMap);
   </script>
 </body>
 </html>
