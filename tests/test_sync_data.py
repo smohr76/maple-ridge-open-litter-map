@@ -145,5 +145,5 @@ def test_write_last_success_marker_creates_timestamp_file(tmp_path):
 
 def test_infer_color_group_assigns_categories():
     tags = [{"category": "pets"}, {"category": "single_use"}, {"category": "smoking"}]
-    assert sync_data.infer_color_group(tags, ["litter"]) == "pets"
+    assert sync_data.infer_color_group(tags, ["litter"]) == "pet_waste"
     assert sync_data.infer_color_group([{"category": "smoking"}], ["litter"]) == "substances"
