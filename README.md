@@ -143,22 +143,6 @@ These improvements will preserve the current low-cost architecture while making 
 
 * **Automated Data Validation & Metric Badging**: Add schema validation tests (e.g., GeoJSON validation via `jsonschema` or `turf`) into the CI pipeline, alongside dynamic README badges displaying live dataset statistics (e.g., total point counts, last sync date).
 
----
-
-## Update Log
-
-### September 19, 2026
-
-- Added a GitHub Actions Python test workflow.
-- Added unit tests for tag normalization and validation logic.
-- Hardened the ingestion script with GeoJSON validation, atomic writes, retry/backoff logic, and a last-success marker.
-- Kept the workflow compatible with the project’s zero-cost static hosting model.
-
-### September 17, 2026
-
-- Initial Stage 1 ETL and GIS pipeline implementation completed.
-- OLM v3 ingestion, GeoJSON export, and client-side map rendering were established.
-
 ------------------------------------------------
 ## Where the project is now end of day Sept 18
 
