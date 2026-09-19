@@ -2,6 +2,7 @@ import os
 import sys
 import time
 import json
+import tempfile
 import requests
 
 LOGIN_URL = "https://openlittermap.com/api/auth/token"
@@ -10,20 +11,20 @@ PHOTOS_URL = "https://openlittermap.com/api/v3/user/photos"
 assert "v3" in PHOTOS_URL, "PHOTOS_URL must use the v3 endpoint — v1 was removed by OpenLitterMap"
 
 
-def classify_tag_group(tag):  
-    category = tag.get("category")  
-    parent_category = tag.get("parent_category")  
-    item = str(tag.get("item", "")).lower()  
-    tag_type = tag.get("type")  
- 
-    if tag_type == "custom_tag" and any(kw in item for kw in ("thc", "cannabis", "weed")):  
-        return "substances"  
-    if category in ("smoking", "alcohol"):  
-        return "substances"  
-    if parent_category in ("smoking", "alcohol"):  
-        return "substances"  
-    if category == "pets" and item in ("dogshit", "dogshit_in_bag"):  
-        return "pet_waste"  
+def classify_tag_group(tag):
+    category = tag.get("category")
+    parent_category = tag.get("parent_category")
+    item = str(tag.get("item", "")).lower()
+    tag_type = tag.get("type")
+
+    if tag_type == "custom_tag" and any(kw in item for kw in ("thc", "cannabis", "weed")):
+        return "substances"
+    if category in ("smoking", "alcohol"):
+        return "substances"
+    if parent_category in ("smoking", "alcohol"):
+        return "substances"
+    if category == "pets" and item in ("dogshit", "dogshit_in_bag"):
+        return "pet_waste"
     return "litter"
 
 
@@ -126,14 +127,14 @@ def build_photo_properties(photo):
         "groups": groups,
         "has_litter": "litter" in groups,
         "has_pet_waste": "pet_waste" in groups,
-        "has_substances": "substances" in groups
+        "has_substances": "substances" in groups,
     }
 
 
 def get_auth_token(email, password, retries=2, delay=3):
     payload = {"email": email, "password": password}
     headers = {"Accept": "application/json"}
-    
+
     for attempt in range(retries + 1):
         try:
             print(f"[INFO] Authenticating against OLM ({LOGIN_URL})...")
@@ -155,26 +156,25 @@ def get_auth_token(email, password, retries=2, delay=3):
 def fetch_all_photos(token):
     headers = {
         "Authorization": f"Bearer {token}",
-        "Accept": "application/json"
+        "Accept": "application/json",
     }
-    
+
     all_photos = []
     current_page = 1
-    max_safety_pages = 200  # Hard circuit breaker against infinite loops
+    max_safety_pages = 200
 
     while current_page <= max_safety_pages:
         params = {"page": current_page}
         print(f"[INFO] Fetching page {current_page} from {PHOTOS_URL}...")
-        
+
         try:
             response = requests.get(PHOTOS_URL, headers=headers, params=params, timeout=30)
             if response.status_code != 200:
                 print(f"[ERROR] HTTP {response.status_code} received on page {current_page}. Terminating fetch.")
                 break
-                
+
             data = response.json()
-            
-            # Extract photo records list regardless of response wrapper
+
             if isinstance(data, dict):
                 photos_page = data.get("photos") or data.get("data") or []
             elif isinstance(data, list):
@@ -182,17 +182,16 @@ def fetch_all_photos(token):
             else:
                 photos_page = []
 
-            # Page-Until-Empty Termination Check
             if not photos_page:
                 print(f"[INFO] Page {current_page} returned 0 records. Reached end of dataset.")
                 break
 
             all_photos.extend(photos_page)
             print(f"[INFO] Page {current_page}: fetched {len(photos_page)} photos (Cumulative total: {len(all_photos)}).")
-            
+
             current_page += 1
             time.sleep(0.5)
-                
+
         except requests.RequestException as exc:
             print(f"[ERROR] Network exception on page {current_page}: {exc}")
             break
@@ -201,6 +200,76 @@ def fetch_all_photos(token):
         print(f"[WARN] Circuit breaker triggered at max safety limit ({max_safety_pages} pages).")
 
     return all_photos
+
+
+def validate_geojson(geojson):
+    if not isinstance(geojson, dict):
+        raise ValueError("GeoJSON payload must be a dictionary.")
+
+    if geojson.get("type") != "FeatureCollection":
+        raise ValueError("GeoJSON must have type 'FeatureCollection'.")
+
+    features = geojson.get("features")
+    if not isinstance(features, list):
+        raise ValueError("GeoJSON 'features' key must be a list.")
+
+    if not features:
+        raise ValueError("GeoJSON contains no feature records; refusing to publish an empty dataset.")
+
+    for index, feature in enumerate(features):
+        if not isinstance(feature, dict):
+            raise ValueError(f"Feature #{index} is not an object.")
+        if feature.get("type") != "Feature":
+            raise ValueError(f"Feature #{index} is missing type 'Feature'.")
+
+        geometry = feature.get("geometry")
+        if not isinstance(geometry, dict):
+            raise ValueError(f"Feature #{index} geometry is missing.")
+        if geometry.get("type") != "Point":
+            raise ValueError(f"Feature #{index} geometry must be a Point.")
+
+        coords = geometry.get("coordinates")
+        if not isinstance(coords, (list, tuple)) or len(coords) != 2:
+            raise ValueError(f"Feature #{index} coordinates must be a [lon, lat] pair.")
+
+        try:
+            lon = float(coords[0])
+            lat = float(coords[1])
+        except (TypeError, ValueError) as exc:
+            raise ValueError(f"Feature #{index} coordinates are not numeric: {coords}") from exc
+
+        if not (-180 <= lon <= 180):
+            raise ValueError(f"Feature #{index} longitude out of range: {lon}")
+        if not (-90 <= lat <= 90):
+            raise ValueError(f"Feature #{index} latitude out of range: {lat}")
+
+        properties = feature.get("properties") or {}
+        if not isinstance(properties, dict):
+            raise ValueError(f"Feature #{index} properties must be an object.")
+
+    return True
+
+
+def write_geojson_atomically(path, geojson):
+    directory = os.path.dirname(path) or "."
+    os.makedirs(directory, exist_ok=True)
+
+    with tempfile.NamedTemporaryFile(
+        mode="w",
+        encoding="utf-8",
+        dir=directory,
+        prefix=".tmp-",
+        suffix=".json",
+        delete=False,
+    ) as temp_file:
+        json.dump(geojson, temp_file, indent=2)
+        temp_file.write("\n")
+        temp_file.flush()
+        os.fsync(temp_file.fileno())
+        temp_path = temp_file.name
+
+    os.replace(temp_path, path)
+    print(f"[SUCCESS] Wrote GeoJSON atomically -> {path}")
 
 
 def fetch_and_build_geojson():
@@ -213,7 +282,7 @@ def fetch_and_build_geojson():
 
     token = get_auth_token(email, password)
     raw_photos = fetch_all_photos(token)
-    
+
     print(f"\n[DIAGNOSTIC] Total raw photo records fetched from API: {len(raw_photos)}")
 
     features = []
@@ -227,26 +296,28 @@ def fetch_and_build_geojson():
             "type": "Feature",
             "geometry": {
                 "type": "Point",
-                "coordinates": [float(coords[0]), float(coords[1])]
+                "coordinates": [float(coords[0]), float(coords[1])],
             },
-            "properties": properties
+            "properties": properties,
         })
 
     geojson = {
         "type": "FeatureCollection",
-        "features": features
+        "features": features,
     }
 
     print(f"[DIAGNOSTIC] Total valid georeferenced features compiled: {len(features)}")
 
-    target_paths = ["data/litter.geojson", "public/data/litter.geojson"]
-    
-    for path in target_paths:
-        os.makedirs(os.path.dirname(path), exist_ok=True)
-        with open(path, "w", encoding="utf-8") as f:
-            json.dump(geojson, f, indent=2)
-        print(f"[SUCCESS] Exported canonical dataset -> {path}")
+    try:
+        validate_geojson(geojson)
+    except ValueError as exc:
+        print(f"[CRITICAL ERROR] GeoJSON validation failed: {exc}")
+        sys.exit(1)
+
+    for path in ["data/litter.geojson", "public/data/litter.geojson"]:
+        write_geojson_atomically(path, geojson)
 
 
 if __name__ == "__main__":
     fetch_and_build_geojson()
+
